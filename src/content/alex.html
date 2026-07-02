@@ -3,29 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alex — AI Marketing Consultant</title>
-<meta name="description" content="Senior marketing expertise, available instantly. Strategy, audits, and plans without the retainer.">
+<title>Alex — AI Marketing Consultant | Strategy, Audits & Plans</title>
+<meta name="description" content="Meet Alex, the AI marketing consultant giving founders and growth teams senior strategy, ruthless audits, and executable plans instantly — no retainer, no scheduling.">
+<meta name="keywords" content="AI marketing consultant, marketing strategy, marketing audit, go-to-market plan, growth strategy, positioning, brand strategy">
 
 <!-- SEO -->
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0A0B0F">
-<link rel="canonical" href="https://yourdomain.com/">
+<link rel="canonical" href="/">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://yourdomain.com/">
+<meta property="og:url" content="/">
 <meta property="og:title" content="Alex — AI Marketing Consultant">
-<meta property="og:description" content="Senior marketing expertise, available instantly. Strategy, audits, and plans without the retainer.">
-<meta property="og:image" content="https://yourdomain.com/og-image.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:description" content="Senior marketing expertise, available instantly. Strategy, audits, and executable plans — without the retainer.">
 <meta property="og:site_name" content="Alex">
+<meta property="og:locale" content="en_US">
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Alex — AI Marketing Consultant">
-<meta name="twitter:description" content="Senior marketing expertise, available instantly. Strategy, audits, and plans without the retainer.">
-<meta name="twitter:image" content="https://yourdomain.com/og-image.png">
+<meta name="twitter:description" content="Senior marketing expertise, available instantly. Strategy, audits, and executable plans — without the retainer.">
+<meta name="twitter:site" content="@Alex">
 
 <script type="application/ld+json">
 {
@@ -317,6 +316,29 @@ nav {
 .composer-hint { font-size: 11px; color: var(--text-3); }
 #chat-depth { font-size: 11px; color: var(--text-3); }
 
+/* ── CONTACT FORM ────────────────────────────────────────────── */
+#contact { max-width: 720px; margin: 0 auto; padding: 100px 40px 60px; }
+.contact-header { text-align: center; margin-bottom: 40px; }
+.contact-header .sec-eye { display: inline-block; }
+.contact-header .sec-title { margin-top: 12px; }
+.contact-header .sec-sub { margin: 12px auto 0; text-align: center; max-width: 460px; margin-bottom: 0; }
+.contact-form { background: var(--surface); border: 1px solid var(--border-med); border-radius: 14px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
+.contact-field { display: flex; flex-direction: column; gap: 7px; }
+.contact-field label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); font-weight: 500; }
+.contact-field input, .contact-field textarea { width: 100%; padding: 11px 14px; font-size: 14px; font-family: var(--sans); font-weight: 300; border-radius: 9px; border: 1px solid var(--border-med); background: var(--base); color: var(--text); outline: none; transition: border-color .15s; line-height: 1.55; }
+.contact-field input:focus, .contact-field textarea:focus { border-color: var(--gold-border); }
+.contact-field input::placeholder, .contact-field textarea::placeholder { color: var(--text-3); }
+.contact-field textarea { resize: vertical; min-height: 130px; }
+.contact-field .err { font-size: 12px; color: #E05252; display: none; }
+.contact-field.invalid input, .contact-field.invalid textarea { border-color: rgba(224,82,82,0.5); }
+.contact-field.invalid .err { display: block; }
+.contact-submit { align-self: flex-start; background: var(--gold); color: #0A0B0F; padding: 12px 26px; border: none; border-radius: 9px; font-size: 14px; font-weight: 500; font-family: var(--sans); cursor: pointer; transition: opacity .15s, transform .12s var(--ease); }
+.contact-submit:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.contact-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.contact-status { font-size: 13px; padding: 12px 14px; border-radius: 9px; display: none; }
+.contact-status.ok { display: block; background: var(--gold-dim); color: var(--gold-text); border: 1px solid var(--gold-border); }
+.contact-status.err { display: block; background: rgba(224,82,82,0.08); color: #E05252; border: 1px solid rgba(224,82,82,0.25); }
+
 /* ── FOOTER ──────────────────────────────────────────────────── */
 footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex; align-items: center; justify-content: space-between; }
 .footer-logo { font-family: var(--serif); font-size: 17px; color: var(--text-2); display: flex; align-items: center; gap: 9px; }
@@ -349,6 +371,8 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   .fw-grid { grid-template-columns: 1fr 1fr; }
   .t-grid { grid-template-columns: 1fr; }
   .fw-band, #chat-section { padding-left: 20px; padding-right: 20px; }
+  #contact { padding-left: 20px; padding-right: 20px; padding-top: 70px; }
+  .contact-form { padding: 22px; }
   footer { flex-direction: column; gap: 18px; text-align: center; padding: 24px 20px; }
   .footer-links { flex-wrap: wrap; justify-content: center; }
 }
@@ -429,6 +453,7 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
     <li><a href="#how">How it works</a></li>
     <li><a href="#modes">Modes</a></li>
     <li><a href="#frameworks">Frameworks</a></li>
+    <li><a href="#contact">Contact</a></li>
     <li><a href="#chat-section" class="nav-cta" id="nav-cta-btn">Talk to Alex</a></li>
   </ul>
   <div class="nav-auth" id="nav-auth"></div>
@@ -620,6 +645,34 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
     </div>
     <div id="usage-meter" style="display:none"></div>
   </div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact">
+  <div class="contact-header">
+    <div class="sec-eye">Get in touch</div>
+    <h2 class="sec-title">Have a question?<br>Drop us a note</h2>
+    <p class="sec-sub">For partnerships, press, or product questions — we usually reply within one business day.</p>
+  </div>
+  <form class="contact-form" id="contact-form" novalidate>
+    <div class="contact-field" id="cf-name-wrap">
+      <label for="cf-name">Name</label>
+      <input id="cf-name" name="name" type="text" autocomplete="name" maxlength="100" placeholder="Your full name" required>
+      <span class="err">Please enter your name (max 100 characters).</span>
+    </div>
+    <div class="contact-field" id="cf-email-wrap">
+      <label for="cf-email">Email</label>
+      <input id="cf-email" name="email" type="email" autocomplete="email" maxlength="255" placeholder="you@company.com" required>
+      <span class="err">Please enter a valid email address.</span>
+    </div>
+    <div class="contact-field" id="cf-message-wrap">
+      <label for="cf-message">Message</label>
+      <textarea id="cf-message" name="message" rows="5" maxlength="1000" placeholder="How can we help?" required></textarea>
+      <span class="err">Please add a short message (max 1000 characters).</span>
+    </div>
+    <div class="contact-status" id="cf-status" role="status" aria-live="polite"></div>
+    <button type="submit" class="contact-submit" id="cf-submit">Send message</button>
+  </form>
 </section>
 
 <!-- FOOTER -->
@@ -1135,6 +1188,69 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMobileM
 
 checkAuth();
 
+
+// ── Contact form ──────────────────────────────────────────────────────────────
+(function() {
+  const form = document.getElementById('contact-form');
+  if (!form) return;
+  const nameEl = document.getElementById('cf-name');
+  const emailEl = document.getElementById('cf-email');
+  const msgEl = document.getElementById('cf-message');
+  const nameWrap = document.getElementById('cf-name-wrap');
+  const emailWrap = document.getElementById('cf-email-wrap');
+  const msgWrap = document.getElementById('cf-message-wrap');
+  const status = document.getElementById('cf-status');
+  const submit = document.getElementById('cf-submit');
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function validate() {
+    let ok = true;
+    const name = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    const message = msgEl.value.trim();
+    nameWrap.classList.toggle('invalid', !(name.length > 0 && name.length <= 100));
+    emailWrap.classList.toggle('invalid', !(email.length > 0 && email.length <= 255 && emailRe.test(email)));
+    msgWrap.classList.toggle('invalid', !(message.length > 0 && message.length <= 1000));
+    ok = !nameWrap.classList.contains('invalid') && !emailWrap.classList.contains('invalid') && !msgWrap.classList.contains('invalid');
+    return ok ? { name, email, message } : null;
+  }
+
+  [nameEl, emailEl, msgEl].forEach(el => el.addEventListener('input', () => {
+    const wrap = el.closest('.contact-field');
+    if (wrap && wrap.classList.contains('invalid')) validate();
+  }));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    status.className = 'contact-status';
+    status.textContent = '';
+    const payload = validate();
+    if (!payload) {
+      status.className = 'contact-status err';
+      status.textContent = 'Please fix the highlighted fields.';
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Request failed');
+      status.className = 'contact-status ok';
+      status.textContent = "Thanks — your message is in. We'll be in touch shortly.";
+      form.reset();
+    } catch (err) {
+      status.className = 'contact-status err';
+      status.textContent = "Something went wrong sending your message. Please try again in a moment.";
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Send message';
+    }
+  });
+})();
 </script>
 </body>
 </html>
