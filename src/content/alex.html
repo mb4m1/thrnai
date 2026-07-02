@@ -646,17 +646,17 @@ const TICKER_QS = [
 let tIdx = 0;
 const track = document.getElementById('ticker');
 setInterval(() => {
-  const cur = track.querySelector('.visible');
+  const cur = track.querySelector('.ticker-item.visible');
   tIdx = (tIdx + 1) % TICKER_QS.length;
   const next = document.createElement('div');
   next.className = 'ticker-item';
   next.textContent = TICKER_QS[tIdx];
   track.appendChild(next);
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    if (cur) { cur.style.opacity = '0'; cur.style.transform = 'translateY(-6px)'; }
+    if (cur) { cur.classList.remove('visible'); cur.classList.add('exit'); }
     next.classList.add('visible');
   }));
-  setTimeout(() => cur?.remove(), 600);
+  setTimeout(() => cur?.remove(), 500);
 }, 3400);
 
 // ── Scroll reveals ─────────────────────────────────────────────────────────────
