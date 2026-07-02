@@ -316,6 +316,29 @@ nav {
 .composer-hint { font-size: 11px; color: var(--text-3); }
 #chat-depth { font-size: 11px; color: var(--text-3); }
 
+/* ── CONTACT FORM ────────────────────────────────────────────── */
+#contact { max-width: 720px; margin: 0 auto; padding: 100px 40px 60px; }
+.contact-header { text-align: center; margin-bottom: 40px; }
+.contact-header .sec-eye { display: inline-block; }
+.contact-header .sec-title { margin-top: 12px; }
+.contact-header .sec-sub { margin: 12px auto 0; text-align: center; max-width: 460px; margin-bottom: 0; }
+.contact-form { background: var(--surface); border: 1px solid var(--border-med); border-radius: 14px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
+.contact-field { display: flex; flex-direction: column; gap: 7px; }
+.contact-field label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); font-weight: 500; }
+.contact-field input, .contact-field textarea { width: 100%; padding: 11px 14px; font-size: 14px; font-family: var(--sans); font-weight: 300; border-radius: 9px; border: 1px solid var(--border-med); background: var(--base); color: var(--text); outline: none; transition: border-color .15s; line-height: 1.55; }
+.contact-field input:focus, .contact-field textarea:focus { border-color: var(--gold-border); }
+.contact-field input::placeholder, .contact-field textarea::placeholder { color: var(--text-3); }
+.contact-field textarea { resize: vertical; min-height: 130px; }
+.contact-field .err { font-size: 12px; color: #E05252; display: none; }
+.contact-field.invalid input, .contact-field.invalid textarea { border-color: rgba(224,82,82,0.5); }
+.contact-field.invalid .err { display: block; }
+.contact-submit { align-self: flex-start; background: var(--gold); color: #0A0B0F; padding: 12px 26px; border: none; border-radius: 9px; font-size: 14px; font-weight: 500; font-family: var(--sans); cursor: pointer; transition: opacity .15s, transform .12s var(--ease); }
+.contact-submit:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.contact-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.contact-status { font-size: 13px; padding: 12px 14px; border-radius: 9px; display: none; }
+.contact-status.ok { display: block; background: var(--gold-dim); color: var(--gold-text); border: 1px solid var(--gold-border); }
+.contact-status.err { display: block; background: rgba(224,82,82,0.08); color: #E05252; border: 1px solid rgba(224,82,82,0.25); }
+
 /* ── FOOTER ──────────────────────────────────────────────────── */
 footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex; align-items: center; justify-content: space-between; }
 .footer-logo { font-family: var(--serif); font-size: 17px; color: var(--text-2); display: flex; align-items: center; gap: 9px; }
