@@ -1188,6 +1188,69 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMobileM
 
 checkAuth();
 
+
+// ── Contact form ──────────────────────────────────────────────────────────────
+(function() {
+  const form = document.getElementById('contact-form');
+  if (!form) return;
+  const nameEl = document.getElementById('cf-name');
+  const emailEl = document.getElementById('cf-email');
+  const msgEl = document.getElementById('cf-message');
+  const nameWrap = document.getElementById('cf-name-wrap');
+  const emailWrap = document.getElementById('cf-email-wrap');
+  const msgWrap = document.getElementById('cf-message-wrap');
+  const status = document.getElementById('cf-status');
+  const submit = document.getElementById('cf-submit');
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function validate() {
+    let ok = true;
+    const name = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    const message = msgEl.value.trim();
+    nameWrap.classList.toggle('invalid', !(name.length > 0 && name.length <= 100));
+    emailWrap.classList.toggle('invalid', !(email.length > 0 && email.length <= 255 && emailRe.test(email)));
+    msgWrap.classList.toggle('invalid', !(message.length > 0 && message.length <= 1000));
+    ok = !nameWrap.classList.contains('invalid') && !emailWrap.classList.contains('invalid') && !msgWrap.classList.contains('invalid');
+    return ok ? { name, email, message } : null;
+  }
+
+  [nameEl, emailEl, msgEl].forEach(el => el.addEventListener('input', () => {
+    const wrap = el.closest('.contact-field');
+    if (wrap && wrap.classList.contains('invalid')) validate();
+  }));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    status.className = 'contact-status';
+    status.textContent = '';
+    const payload = validate();
+    if (!payload) {
+      status.className = 'contact-status err';
+      status.textContent = 'Please fix the highlighted fields.';
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = 'Sending…';
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Request failed');
+      status.className = 'contact-status ok';
+      status.textContent = "Thanks — your message is in. We'll be in touch shortly.";
+      form.reset();
+    } catch (err) {
+      status.className = 'contact-status err';
+      status.textContent = "Something went wrong sending your message. Please try again in a moment.";
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Send message';
+    }
+  });
+})();
 </script>
 </body>
 </html>
