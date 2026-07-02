@@ -647,6 +647,34 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   </div>
 </section>
 
+<!-- CONTACT -->
+<section id="contact">
+  <div class="contact-header">
+    <div class="sec-eye">Get in touch</div>
+    <h2 class="sec-title">Have a question?<br>Drop us a note</h2>
+    <p class="sec-sub">For partnerships, press, or product questions — we usually reply within one business day.</p>
+  </div>
+  <form class="contact-form" id="contact-form" novalidate>
+    <div class="contact-field" id="cf-name-wrap">
+      <label for="cf-name">Name</label>
+      <input id="cf-name" name="name" type="text" autocomplete="name" maxlength="100" placeholder="Your full name" required>
+      <span class="err">Please enter your name (max 100 characters).</span>
+    </div>
+    <div class="contact-field" id="cf-email-wrap">
+      <label for="cf-email">Email</label>
+      <input id="cf-email" name="email" type="email" autocomplete="email" maxlength="255" placeholder="you@company.com" required>
+      <span class="err">Please enter a valid email address.</span>
+    </div>
+    <div class="contact-field" id="cf-message-wrap">
+      <label for="cf-message">Message</label>
+      <textarea id="cf-message" name="message" rows="5" maxlength="1000" placeholder="How can we help?" required></textarea>
+      <span class="err">Please add a short message (max 1000 characters).</span>
+    </div>
+    <div class="contact-status" id="cf-status" role="status" aria-live="polite"></div>
+    <button type="submit" class="contact-submit" id="cf-submit">Send message</button>
+  </form>
+</section>
+
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo"><span class="footer-dot"></span>Alex</div>
