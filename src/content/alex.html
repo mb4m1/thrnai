@@ -698,19 +698,27 @@ const TICKER_QS = [
 ];
 let tIdx = 0;
 const track = document.getElementById('ticker');
-setInterval(() => {
+let tickerBusy = false;
+function rotateTicker() {
+  if (document.hidden || tickerBusy) return;
   const cur = track.querySelector('.ticker-item.visible');
+  if (!cur) return;
+  tickerBusy = true;
   tIdx = (tIdx + 1) % TICKER_QS.length;
+  // Remove any stale items other than the current visible one
+  track.querySelectorAll('.ticker-item').forEach(el => { if (el !== cur) el.remove(); });
   const next = document.createElement('div');
   next.className = 'ticker-item';
   next.textContent = TICKER_QS[tIdx];
   track.appendChild(next);
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    if (cur) { cur.classList.remove('visible'); cur.classList.add('exit'); }
+    cur.classList.remove('visible');
+    cur.classList.add('exit');
     next.classList.add('visible');
   }));
-  setTimeout(() => cur?.remove(), 500);
-}, 3400);
+  setTimeout(() => { cur.remove(); tickerBusy = false; }, 550);
+}
+setInterval(rotateTicker, 3400);
 
 // ── Scroll reveals ─────────────────────────────────────────────────────────────
 const revealObs = new IntersectionObserver((entries) => {
