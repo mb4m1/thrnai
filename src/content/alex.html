@@ -1000,7 +1000,7 @@ async function chatSend(override) {
   chatHistory.push({ role: 'user', content: text });
   showTyping();
 
-  const onBackend = !!(window.__ALEX_PROXY__ || window.location.port === '3001');
+  const onBackend = true;
 
   await new Promise(r => setTimeout(r, 320)); // brief thinking pause
   removeTyping();
