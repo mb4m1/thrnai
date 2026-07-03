@@ -5,6 +5,8 @@ interface ChatMessage {
   content: string;
 }
 
+const jsonHeaders = { "content-type": "application/json" };
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -13,7 +15,7 @@ export const Route = createFileRoute("/api/chat")({
         if (!apiKey) {
           return new Response(
             JSON.stringify({ error: { message: "AI is not configured" } }),
-            { status: 500, headers: { "content-type": "application/json" } },
+            { status: 500, headers: jsonHeaders },
           );
         }
 
@@ -27,7 +29,7 @@ export const Route = createFileRoute("/api/chat")({
         } catch {
           return new Response(
             JSON.stringify({ error: { message: "Invalid JSON body" } }),
-            { status: 400, headers: { "content-type": "application/json" } },
+            { status: 400, headers: jsonHeaders },
           );
         }
 
@@ -44,10 +46,11 @@ export const Route = createFileRoute("/api/chat")({
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: `Bearer ${apiKey}`,
+            "Lovable-API-Key": apiKey,
+            "X-Lovable-AIG-SDK": "native-fetch",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: "google/gemini-3-flash-preview",
             messages: openaiMessages,
             stream: true,
             max_tokens: Math.min(body.max_tokens ?? 1000, 2000),
@@ -59,7 +62,7 @@ export const Route = createFileRoute("/api/chat")({
           const status = upstream.status === 429 || upstream.status === 402 ? upstream.status : 500;
           return new Response(
             JSON.stringify({ error: { message: errText || "Upstream error" } }),
-            { status, headers: { "content-type": "application/json" } },
+            { status, headers: jsonHeaders },
           );
         }
 
