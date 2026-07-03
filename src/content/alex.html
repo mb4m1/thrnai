@@ -902,8 +902,8 @@ function removeTyping() {
   document.getElementById('chat-typing')?.remove();
 }
 
-// Streaming AI message — SSE for both proxy and direct paths
-async function streamAiMsg(onBackend) {
+// Streaming AI message — always uses the local server route
+async function streamAiMsg() {
   const msgs = document.getElementById('chat-messages');
   const wrap = document.createElement('div');
   wrap.className = 'cmsg ai';
@@ -915,10 +915,8 @@ async function streamAiMsg(onBackend) {
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
 
-  const MODEL = 'claude-sonnet-4-6';
-  const API_URL = onBackend ? '/api/chat' : 'https://api.anthropic.com/v1/messages';
+  const API_URL = '/api/chat';
   const headers = { 'Content-Type': 'application/json' };
-  if (!onBackend) headers['anthropic-version'] = '2023-06-01';
 
   let fullText = '';
 
@@ -927,7 +925,6 @@ async function streamAiMsg(onBackend) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: MODEL,
         max_tokens: 1000,
         stream: true,
         system: MODES[chatMode].system,
@@ -945,7 +942,7 @@ async function streamAiMsg(onBackend) {
       throw new Error(msg);
     }
 
-    // Parse SSE stream — works for both proxy and direct Anthropic
+    // Parse local SSE stream
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
@@ -1000,12 +997,10 @@ async function chatSend(override) {
   chatHistory.push({ role: 'user', content: text });
   showTyping();
 
-  const onBackend = true;
-
   await new Promise(r => setTimeout(r, 320)); // brief thinking pause
   removeTyping();
 
-  const reply = await streamAiMsg(onBackend);
+  const reply = await streamAiMsg();
   if (reply) {
     chatHistory.push({ role: 'assistant', content: reply });
     updateDepth();
