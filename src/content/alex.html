@@ -1258,10 +1258,10 @@ function renderUsageMeter(today, limits) {
 
 // Refresh usage after each successful reply
 const _origUpdateDepth = updateDepth;
-function updateDepth() {
+updateDepth = function () {
   _origUpdateDepth();
   loadUsage();
-}
+};
 
 // Handle ?auth=success / ?auth=failed redirects from OAuth
 const urlParams = new URLSearchParams(window.location.search);
