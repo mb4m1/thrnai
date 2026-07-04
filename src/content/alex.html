@@ -902,6 +902,137 @@ function removeTyping() {
   document.getElementById('chat-typing')?.remove();
 }
 
+// User-facing error states for the local chat API.
+const CHAT_ERRORS = {
+  network: {
+    title: "Alex couldn't reach the server",
+    desc: () => "The connection to Alex's chat service was interrupted. Check your internet connection, then try again."
+  },
+  server: {
+    title: "Alex hit a snag",
+    desc: (d) => "Something went wrong while generating a response — your message is saved. Try sending it again." + (d ? ` (${d})` : '')
+  },
+  rate: {
+    title: "Slow down a moment",
+    desc: () => "You've sent a lot of messages in a short time. Wait a few seconds, then try again."
+  },
+  empty: {
+    title: "Alex came back empty",
+    desc: () => "The response came back blank. Try rephrasing your message, or send it again."
+  }
+};
+
+// Typed chat error so the handler can pick the right copy.
+function chatError(kind, detail) {
+  return { __chatError: true, kind, detail };
+}
+
+// Core streaming routine — targets an existing AI bubble so fresh sends and
+// retries share one code path. Returns the streamed text or throws a chatError.
+async function streamIntoBubble(bubble) {
+  const msgs = document.getElementById('chat-messages');
+  bubble.classList.remove('err');
+  bubble.innerHTML = '<span class="stream-cursor"></span>';
+  msgs.scrollTop = msgs.scrollHeight;
+
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      max_tokens: 1000,
+      stream: true,
+      system: MODES[chatMode].system,
+      messages: chatHistory
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    if (res.status === 429) throw chatError('rate');
+    const msg = err?.error?.message || err?.error || ('Server error ' + res.status);
+    throw chatError('server', msg);
+  }
+  if (!res.body) throw chatError('server', 'No response stream');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let fullText = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop(); // keep incomplete last line
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (raw === '[DONE]') break;
+      try {
+        const evt = JSON.parse(raw);
+        if (evt.type === 'content_block_delta' && evt.delta?.text) {
+          fullText += evt.delta.text;
+          bubble.innerHTML = renderMarkdown(fullText) + '<span class="stream-cursor"></span>';
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+      } catch { /* skip malformed SSE line */ }
+    }
+  }
+
+  if (!fullText.trim()) throw chatError('empty');
+  bubble.innerHTML = renderMarkdown(fullText);
+  return fullText;
+}
+
+// Render a structured, accessible error card: icon + heading + copy + retry.
+function renderChatError(bubble, kind, detail) {
+  const cfg = CHAT_ERRORS[kind] || CHAT_ERRORS.server;
+  bubble.classList.add('err');
+  bubble.innerHTML =
+    '<div class="err-head" role="alert">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+      '<span class="err-title"></span>' +
+    '</div>' +
+    '<p class="err-desc"></p>' +
+    '<div class="err-actions">' +
+      '<button type="button" class="chat-retry" aria-label="Retry last message">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+        '<span>Try again</span>' +
+      '</button>' +
+    '</div>';
+
+  bubble.querySelector('.err-title').textContent = cfg.title;
+  bubble.querySelector('.err-desc').textContent = cfg.desc(detail);
+  bubble.querySelector('.chat-retry').addEventListener('click', function () {
+    retryMessage(this);
+  });
+}
+
+// Retry the last turn into the same bubble — the user message is already in
+// chatHistory, so we just re-run the stream without re-adding it.
+async function retryMessage(btn) {
+  if (chatBusy) return;
+  const bubble = btn.closest('.cbubble');
+  if (!bubble) return;
+  chatBusy = true;
+  document.getElementById('chat-send').disabled = true;
+  try {
+    const reply = await streamIntoBubble(bubble);
+    chatHistory.push({ role: 'assistant', content: reply });
+    updateDepth();
+  } catch (e) {
+    const kind = e && e.__chatError ? e.kind : 'network';
+    const detail = e && e.__chatError ? e.detail : (e && e.message);
+    renderChatError(bubble, kind, detail);
+  } finally {
+    chatBusy = false;
+    document.getElementById('chat-send').disabled = false;
+    const input = document.getElementById('chat-input');
+    if (input) input.focus();
+  }
+}
+
 // Streaming AI message — always uses the local server route
 async function streamAiMsg() {
   const msgs = document.getElementById('chat-messages');
@@ -909,71 +1040,17 @@ async function streamAiMsg() {
   wrap.className = 'cmsg ai';
   const bubble = document.createElement('div');
   bubble.className = 'cbubble';
-  bubble.innerHTML = '<span class="stream-cursor"></span>';
   wrap.appendChild(makeAv('ai'));
   wrap.appendChild(bubble);
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
 
-  const API_URL = '/api/chat';
-  const headers = { 'Content-Type': 'application/json' };
-
-  let fullText = '';
-
   try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        max_tokens: 1000,
-        stream: true,
-        system: MODES[chatMode].system,
-        messages: chatHistory
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      if (res.status === 429) {
-        bubble.innerHTML = "<p>You've sent a lot of messages — give it a moment and try again.</p>";
-        return null;
-      }
-      const msg = err?.error?.message || err?.error || ('Server error ' + res.status);
-      throw new Error(msg);
-    }
-
-    // Parse local SSE stream
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop(); // keep incomplete last line
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const raw = line.slice(6).trim();
-        if (raw === '[DONE]') break;
-        try {
-          const evt = JSON.parse(raw);
-          if (evt.type === 'content_block_delta' && evt.delta?.text) {
-            fullText += evt.delta.text;
-            bubble.innerHTML = renderMarkdown(fullText) + '<span class="stream-cursor"></span>';
-            msgs.scrollTop = msgs.scrollHeight;
-          }
-        } catch { /* skip malformed SSE line */ }
-      }
-    }
-
-    // Done — finalise without cursor
-    bubble.innerHTML = renderMarkdown(fullText);
-    return fullText;
-
+    return await streamIntoBubble(bubble);
   } catch (e) {
-    bubble.innerHTML = `<p>Connection error — ${e.message || 'please try again.'}</p>`;
+    const kind = e && e.__chatError ? e.kind : 'network';
+    const detail = e && e.__chatError ? e.detail : (e && e.message);
+    renderChatError(bubble, kind, detail);
     return null;
   }
 }
