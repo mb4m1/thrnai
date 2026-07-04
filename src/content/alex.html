@@ -316,6 +316,31 @@ nav {
 .composer-hint { font-size: 11px; color: var(--text-3); }
 #chat-depth { font-size: 11px; color: var(--text-3); }
 
+/* Chat error state — shown when the local chat API fails */
+.cmsg.ai .cbubble.err {
+  background: rgba(224, 130, 90, 0.06);
+  border: 1px solid rgba(224, 130, 90, 0.26);
+  border-left: 2px solid rgba(224, 130, 90, 0.75);
+  max-width: 84%;
+}
+.err-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.err-head svg { width: 15px; height: 15px; flex-shrink: 0; stroke: rgba(224, 130, 90, 0.9); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.err-title { font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--text); }
+.err-desc { font-size: 13px; color: var(--text-2); line-height: 1.62; margin: 0 0 12px; }
+.err-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.chat-retry {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; font-family: var(--sans);
+  padding: 7px 14px; border-radius: 8px; cursor: pointer;
+  background: rgba(255,255,255,0.06); color: var(--text);
+  border: 1px solid var(--border-med); transition: background .15s, border-color .15s, opacity .15s;
+}
+.chat-retry:hover:not(:disabled) { background: rgba(255,255,255,0.11); border-color: var(--border-hi); }
+.chat-retry:disabled { opacity: 0.5; cursor: default; }
+.chat-retry svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.err-meta { font-size: 11px; color: var(--text-3); }
+
+
 /* ── CONTACT FORM ────────────────────────────────────────────── */
 #contact { max-width: 720px; margin: 0 auto; padding: 100px 40px 60px; }
 .contact-header { text-align: center; margin-bottom: 40px; }
