@@ -340,6 +340,39 @@ nav {
 .chat-retry svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .err-meta { font-size: 11px; color: var(--text-3); }
 
+/* Engine badge — identifies the AI engine responding in chat */
+.engine-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin: 20px auto 0; padding: 6px 13px;
+  border-radius: 20px; background: var(--card);
+  border: 1px solid var(--border-med); font-family: var(--sans);
+  transition: border-color .25s, background .25s;
+}
+.engine-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--gold); flex-shrink: 0; position: relative;
+}
+.engine-dot::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: var(--gold); animation: enginePulse 2.4s ease-out infinite;
+}
+@keyframes enginePulse {
+  0% { transform: scale(1); opacity: 0.55; }
+  70% { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.engine-badge.responding { border-color: var(--gold-border); background: var(--gold-dim); }
+.engine-badge.responding .engine-dot::after { animation-duration: 1s; }
+.engine-name { font-size: 12px; font-weight: 500; color: var(--text); letter-spacing: 0.01em; }
+.engine-name .tm { font-size: 9px; vertical-align: super; color: var(--text-2); margin-left: 1px; }
+.engine-sep { width: 1px; height: 11px; background: var(--border-med); }
+.engine-model { font-size: 11px; color: var(--text-3); letter-spacing: 0.02em; }
+.engine-state {
+  display: none; font-size: 11px; color: var(--gold-text);
+  letter-spacing: 0.02em; font-style: italic;
+}
+.engine-badge.responding .engine-state { display: inline; }
+.engine-badge.responding .engine-model { display: none; }
 
 /* ── CONTACT FORM ────────────────────────────────────────────── */
 #contact { max-width: 720px; margin: 0 auto; padding: 100px 40px 60px; }
@@ -625,6 +658,13 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
       <div class="sec-eye">Live · No account needed</div>
       <h2 class="sec-title">Talk to Alex now</h2>
       <p class="sec-sub">This is the real thing — not a demo. Describe your challenge and get expert marketing advice instantly.</p>
+      <div class="engine-badge" id="engine-badge" title="Alex is powered by the THRN™ 1.0 engine, built on OpenAI GPT">
+        <span class="engine-dot" aria-hidden="true"></span>
+        <span class="engine-name">THRN<span class="tm">™</span> 1.0</span>
+        <span class="engine-sep" aria-hidden="true"></span>
+        <span class="engine-model">OpenAI GPT</span>
+        <span class="engine-state" aria-hidden="true">responding</span>
+      </div>
     </div>
 
     <div class="chat-modes" id="chat-modes">
@@ -1041,6 +1081,7 @@ async function retryMessage(btn) {
   const bubble = btn.closest('.cbubble');
   if (!bubble) return;
   chatBusy = true;
+  setEngineResponding(true);
   document.getElementById('chat-send').disabled = true;
   try {
     const reply = await streamIntoBubble(bubble);
@@ -1051,6 +1092,7 @@ async function retryMessage(btn) {
     const detail = e && e.__chatError ? e.detail : (e && e.message);
     renderChatError(bubble, kind, detail);
   } finally {
+    setEngineResponding(false);
     chatBusy = false;
     document.getElementById('chat-send').disabled = false;
     const input = document.getElementById('chat-input');
@@ -1093,6 +1135,7 @@ async function chatSend(override) {
   input.value = '';
   input.style.height = '42px';
   chatBusy = true;
+  setEngineResponding(true);
   document.getElementById('chat-send').disabled = true;
 
   addUserMsg(text);
@@ -1108,9 +1151,17 @@ async function chatSend(override) {
     updateDepth();
   }
 
+  setEngineResponding(false);
   chatBusy = false;
   document.getElementById('chat-send').disabled = false;
   input.focus();
+}
+
+// Toggle the THRN™ 1.0 engine badge into its "responding" state while the
+// AI is generating, so users can see the active engine at a glance.
+function setEngineResponding(busy) {
+  const badge = document.getElementById('engine-badge');
+  if (badge) badge.classList.toggle('responding', !!busy);
 }
 
 function renderPills() {
