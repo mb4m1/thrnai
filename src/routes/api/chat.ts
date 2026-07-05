@@ -50,7 +50,9 @@ export const Route = createFileRoute("/api/chat")({
             "X-Lovable-AIG-SDK": "native-fetch",
           },
           body: JSON.stringify({
-            model: "google/gemini-3-flash-preview",
+            // THRN™ 1.0 AI Marketing Consultant — foundation model: OpenAI GPT.
+            // To upgrade to a future GPT version, change this identifier only.
+            model: "openai/gpt-5.5",
             messages: openaiMessages,
             stream: true,
             max_tokens: Math.min(body.max_tokens ?? 1000, 2000),
