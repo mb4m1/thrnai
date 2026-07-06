@@ -55,7 +55,7 @@ export const Route = createFileRoute("/api/chat")({
             model: "openai/gpt-5.5",
             messages: openaiMessages,
             stream: true,
-            max_tokens: Math.min(body.max_tokens ?? 1000, 2000),
+            max_completion_tokens: Math.min(body.max_tokens ?? 1000, 2000),
           }),
         });
 
