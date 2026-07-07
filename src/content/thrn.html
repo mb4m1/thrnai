@@ -76,8 +76,8 @@ nav {
   border-bottom: 1px solid var(--border);
 }
 .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-.nav-logo-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--gold-dim); border: 1px solid var(--gold-border); display: flex; align-items: center; justify-content: center; }
-.nav-logo-mark svg { width: 14px; height: 14px; stroke: var(--gold); }
+.nav-logo-mark { width: 32px; height: 32px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.nav-logo-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .nav-logo-name { font-family: var(--serif); font-size: 18px; color: var(--text); letter-spacing: -0.01em; }
 .nav-links { display: flex; align-items: center; gap: 6px; list-style: none; }
 .nav-links a { color: var(--text-2); font-size: 13.5px; text-decoration: none; padding: 6px 12px; border-radius: 6px; transition: color .15s, background .15s; }
@@ -503,7 +503,7 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
 <nav>
   <a href="#" class="nav-logo">
     <div class="nav-logo-mark">
-      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <img src="/THRN-logo.jpeg" alt="THRN logo">
     </div>
     <span class="nav-logo-name">THRN</span>
   </a>
