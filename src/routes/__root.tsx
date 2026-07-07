@@ -78,18 +78,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "THRN- AI Marketing Consultant" },
-      { name: "description", content: "The senior marketer you actually need.
-AI Marketing Consultant" },
+      { name: "description", content: "The senior marketer you actually need. AI Marketing Consultant" },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "THRN- AI Marketing Consultant" },
-      { property: "og:description", content: "The senior marketer you actually need.
-AI Marketing Consultant" },
+      { property: "og:description", content: "The senior marketer you actually need. AI Marketing Consultant" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "THRN- AI Marketing Consultant" },
-      { name: "twitter:description", content: "The senior marketer you actually need.
-AI Marketing Consultant" },
+      { name: "twitter:description", content: "The senior marketer you actually need. AI Marketing Consultant" },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/2396a376-d8d7-485f-b9b6-557e59ebbfa6" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/2396a376-d8d7-485f-b9b6-557e59ebbfa6" },
     ],
