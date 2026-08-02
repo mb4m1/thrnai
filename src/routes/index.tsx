@@ -18,7 +18,7 @@ export function buildCsp(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "font-src 'self' data:",
+    "img-src 'self' data: https:",
     "connect-src 'self'",
     "frame-ancestors 'self'",
     "base-uri 'self'",
