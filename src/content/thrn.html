@@ -924,7 +924,11 @@ function renderMarkdown(text) {
   const fqMatch = text.match(/Follow-ups?:([\s\S]*?)$/i);
   if (fqMatch) {
     text = text.slice(0, fqMatch.index);
-    const fqs = fqMatch[1].split('\n').map(s => s.replace(/^[\s\-\d.•]+/, '').trim()).filter(Boolean);
+    const fqs = fqMatch[1].split('\n')
+      // Strip any markup the renderer itself injected above, so the value we
+      // put in an attribute contains no quotes or angle brackets at all.
+      .map(s => s.replace(/<[^>]*>/g, '').replace(/^[\s\-\d.•]+/, '').trim())
+      .filter(Boolean);
     if (fqs.length) {
       fqHtml = '<div class="fq-row">' + fqs.map(q =>
         // q is already HTML-escaped, so it is safe in both attribute and text position.
