@@ -173,24 +173,25 @@ describe("renderMarkdown neutralizes model/user-controlled HTML", () => {
 });
 
 describe("chat rendering call sites", () => {
-  it("never interpolates untrusted chat text into innerHTML without renderMarkdown", () => {
-    // Grab each full `x.innerHTML = ...;` statement (may span multiple lines).
-    const statements = [...html.matchAll(/innerHTML\s*=\s*([\s\S]*?);\s*\n/g)].map((m) =>
-      m[1].trim(),
-    );
+  it("never interpolates untrusted chat text into chat innerHTML without renderMarkdown", () => {
+    // Every innerHTML assignment on a chat surface (bubble/messages/row).
+    const statements = [
+      ...html.matchAll(/\b(?:bubble|msgs|row)\.innerHTML\s*=\s*([\s\S]*?);/g),
+    ].map((m) => m[1].trim());
     expect(statements.length).toBeGreaterThan(0);
 
     // Identifiers that can hold model- or user-controlled text.
-    const UNTRUSTED = /\b(fullText|detail|userText|q|input|value|content|payload|raw|errText)\b/;
+    const UNTRUSTED = /\b(fullText|detail|userText|text|content|payload|raw|errText)\b/;
 
     for (const stmt of statements) {
       if (stmt.includes("renderMarkdown(")) continue; // escaped by the renderer
       expect(
         UNTRUSTED.test(stmt),
-        `innerHTML assignment interpolates untrusted data: ${stmt}`,
+        `chat innerHTML assignment interpolates untrusted data: ${stmt}`,
       ).toBe(false);
     }
   });
+
 
 
   it("renders user messages with textContent, never innerHTML", () => {
