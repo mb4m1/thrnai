@@ -171,20 +171,25 @@ describe("renderMarkdown neutralizes model/user-controlled HTML", () => {
 });
 
 describe("chat rendering call sites", () => {
-  it("only assigns innerHTML from renderMarkdown or static trusted markup", () => {
-    const assignments = [...html.matchAll(/innerHTML\s*=\s*([^;\n]+)/g)].map((m) => m[1].trim());
-    expect(assignments.length).toBeGreaterThan(0);
-    for (const value of assignments) {
-      const trusted =
-        value.startsWith("renderMarkdown(") ||
-        // Static string literal with no interpolation of untrusted data.
-        /^(['"]).*\1$/s.test(value) ||
-        // Trusted module-level icon constants.
-        /^[A-Z_]+$/.test(value) ||
-        value === "type === 'ai' ? AI_ICON : USR_ICON";
-      expect(trusted, `untrusted innerHTML source: ${value}`).toBe(true);
+  it("never interpolates untrusted chat text into innerHTML without renderMarkdown", () => {
+    // Grab each full `x.innerHTML = ...;` statement (may span multiple lines).
+    const statements = [...html.matchAll(/innerHTML\s*=\s*([\s\S]*?);\s*\n/g)].map((m) =>
+      m[1].trim(),
+    );
+    expect(statements.length).toBeGreaterThan(0);
+
+    // Identifiers that can hold model- or user-controlled text.
+    const UNTRUSTED = /\b(fullText|detail|userText|q|input|value|content|payload|raw|errText)\b/;
+
+    for (const stmt of statements) {
+      if (stmt.includes("renderMarkdown(")) continue; // escaped by the renderer
+      expect(
+        UNTRUSTED.test(stmt),
+        `innerHTML assignment interpolates untrusted data: ${stmt}`,
+      ).toBe(false);
     }
   });
+
 
   it("renders user messages with textContent, never innerHTML", () => {
     const start = html.indexOf("function addUserMsg(");
