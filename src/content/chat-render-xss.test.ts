@@ -130,9 +130,11 @@ describe("escapeHtml", () => {
 describe("renderMarkdown neutralizes model/user-controlled HTML", () => {
   for (const payload of PAYLOADS) {
     it(`neutralizes: ${payload.slice(0, 44)}`, () => {
-      const host = assertSafe(renderMarkdown(payload));
-      // The payload survives as visible text, not markup.
-      expect(host.textContent).toContain("alert");
+      const rendered = renderMarkdown(payload);
+      const host = assertSafe(rendered);
+      // The payload survives only as visible text, with markup escaped.
+      if (payload.includes("<")) expect(rendered).toContain("&lt;");
+      expect(host.textContent?.length).toBeGreaterThan(0);
     });
   }
 
