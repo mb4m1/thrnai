@@ -26,7 +26,7 @@
 <meta name="twitter:description" content="Senior marketing expertise, available instantly. Strategy, audits, and executable plans — without the retainer.">
 <meta name="twitter:site" content="@THRN">
 
-<script type="application/ld+json">
+<script type="application/ld+json" nonce="__CSP_NONCE__">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -520,10 +520,10 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   </button>
 </nav>
 <div id="mobile-menu" role="navigation" aria-label="Mobile menu">
-  <a href="#how" onclick="closeMobileMenu()">How it works</a>
-  <a href="#modes" onclick="closeMobileMenu()">Modes</a>
-  <a href="#frameworks" onclick="closeMobileMenu()">Frameworks</a>
-  <a href="#chat-section" onclick="closeMobileMenu()" class="m-cta">Talk to THRN</a>
+  <a href="#how" data-action="close-menu">How it works</a>
+  <a href="#modes" data-action="close-menu">Modes</a>
+  <a href="#frameworks" data-action="close-menu">Frameworks</a>
+  <a href="#chat-section" data-action="close-menu" class="m-cta">Talk to THRN</a>
 </div>
 
 <!-- HERO -->
@@ -668,17 +668,17 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
     </div>
 
     <div class="chat-modes" id="chat-modes">
-      <button class="cmode-btn active" data-mode="consult" onclick="chatSetMode('consult')">
+      <button class="cmode-btn active" data-mode="consult" data-action="set-mode">
         <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Consult
       </button>
-      <button class="cmode-btn" data-mode="audit" onclick="chatSetMode('audit')">
+      <button class="cmode-btn" data-mode="audit" data-action="set-mode">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Audit
       </button>
-      <button class="cmode-btn" data-mode="plan" onclick="chatSetMode('plan')">
+      <button class="cmode-btn" data-mode="plan" data-action="set-mode">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Plan
       </button>
       <div class="chat-spacer"></div>
-      <button class="chat-reset-btn" onclick="chatReset()">↺ New chat</button>
+      <button class="chat-reset-btn" data-action="reset-chat">↺ New chat</button>
     </div>
 
     <div class="chat-pills" id="chat-pills"></div>
@@ -699,7 +699,7 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
     <div class="composer">
       <div class="composer-row">
         <textarea id="chat-input" aria-label="Message input" placeholder="Describe your marketing challenge…" rows="1"></textarea>
-        <button id="chat-send" onclick="chatSend()" aria-label="Send">
+        <button id="chat-send" data-action="send" aria-label="Send">
           <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
@@ -747,7 +747,7 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   <div class="footer-right">AI Marketing Consultant · Free to start</div>
 </footer>
 
-<script>
+<script nonce="__CSP_NONCE__">
 // ── Ticker ────────────────────────────────────────────────────────────────────
 const TICKER_QS = [
   '"Our CAC tripled in Q3 — how do we diagnose where the funnel broke?"',
@@ -932,7 +932,7 @@ function renderMarkdown(text) {
     if (fqs.length) {
       fqHtml = '<div class="fq-row">' + fqs.map(q =>
         // q is already HTML-escaped, so it is safe in both attribute and text position.
-        `<button class="fq-btn" data-q="${q}" onclick="chatSend(this.dataset.q)">↳ ${q}</button>`
+        `<button class="fq-btn" data-q="${q}" data-action="send-q">↳ ${q}</button>`
       ).join('') + '</div>';
     }
   }
@@ -1423,6 +1423,19 @@ checkAuth();
     }
   });
 })();
+
+// ── Delegated event handling (CSP: no inline event handlers) ──────────────────
+document.addEventListener('click', (e) => {
+  const el = e.target instanceof Element ? e.target.closest('[data-action]') : null;
+  if (!el) return;
+  switch (el.getAttribute('data-action')) {
+    case 'close-menu': closeMobileMenu(); break;
+    case 'set-mode': chatSetMode(el.getAttribute('data-mode')); break;
+    case 'reset-chat': chatReset(); break;
+    case 'send': chatSend(); break;
+    case 'send-q': chatSend(el.dataset.q); break;
+  }
+});
 </script>
 </body>
 </html>
