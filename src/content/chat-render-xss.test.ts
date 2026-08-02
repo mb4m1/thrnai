@@ -157,7 +157,9 @@ describe("renderMarkdown neutralizes model/user-controlled HTML", () => {
     const buttons = host.querySelectorAll("button.fq-btn");
     expect(buttons.length).toBeGreaterThan(0);
     for (const btn of Array.from(buttons)) {
-      expect(btn.getAttribute("onclick")).toBe("chatSend(this.dataset.q)");
+      // No inline handler at all — clicks go through the delegated listener.
+      expect(btn.getAttribute("onclick")).toBe(null);
+      expect(btn.getAttribute("data-action")).toBe("send-q");
     }
   });
 
