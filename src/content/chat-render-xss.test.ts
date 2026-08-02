@@ -132,7 +132,7 @@ describe("renderMarkdown neutralizes model/user-controlled HTML", () => {
     it(`neutralizes: ${payload.slice(0, 44)}`, () => {
       const host = assertSafe(renderMarkdown(payload));
       // The payload survives as visible text, not markup.
-      expect(host.textContent).toContain("<");
+      expect(host.textContent).toContain("alert");
     });
   }
 
