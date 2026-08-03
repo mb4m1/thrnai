@@ -1637,7 +1637,7 @@ document.addEventListener('click', (e) => {
       w = hero.clientWidth; h = hero.clientHeight;
       cv.width = Math.max(1, w * dpr); cv.height = Math.max(1, h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.max(18, Math.min(46, Math.round(w * h / 26000)));
+      const count = Math.max(18, Math.min(64, Math.round(w * h / 18000)));
       nodes = Array.from({ length: count }, () => ({
         x: Math.random() * w, y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.12, vy: (Math.random() - 0.5) * 0.12,
@@ -1660,7 +1660,7 @@ document.addEventListener('click', (e) => {
           const dx = a.x - b.x, dy = a.y - b.y;
           const d2 = dx * dx + dy * dy;
           if (d2 < 26000) {
-            const alpha = (1 - d2 / 26000) * 0.16;
+            const alpha = (1 - d2 / 26000) * 0.22;
             ctx.strokeStyle = 'rgba(124,158,122,' + alpha.toFixed(3) + ')';
             ctx.lineWidth = 0.6;
             ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
@@ -1669,7 +1669,7 @@ document.addEventListener('click', (e) => {
       }
       for (const n of nodes) {
         const pulse = 0.5 + 0.5 * Math.sin(t / 1400 + n.p);
-        ctx.fillStyle = 'rgba(168,196,166,' + (0.16 + pulse * 0.3).toFixed(3) + ')';
+        ctx.fillStyle = 'rgba(168,196,166,' + (0.22 + pulse * 0.34).toFixed(3) + ')';
         ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
       }
     }
