@@ -494,6 +494,146 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   #auth-gate h3 { font-family: var(--serif); font-size: 22px; color: var(--text); font-weight: 400; }
   #auth-gate p { font-size: 13.5px; color: var(--text-2); max-width: 300px; line-height: 1.6; }
   #chat-messages-wrap { position: relative; }
+  /* ── PREMIUM ATMOSPHERE ───────────────────────────────────── */
+  body { position: relative; }
+  .amb { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .amb::before, .amb::after {
+    content: ""; position: absolute; border-radius: 50%;
+    filter: blur(90px); opacity: .5;
+  }
+  .amb::before {
+    width: 60vw; height: 60vw; top: -22vw; left: -12vw;
+    background: radial-gradient(circle, rgba(124,158,122,0.16), transparent 68%);
+    animation: ambDrift 26s ease-in-out infinite alternate;
+  }
+  .amb::after {
+    width: 46vw; height: 46vw; bottom: -18vw; right: -10vw;
+    background: radial-gradient(circle, rgba(120,140,190,0.10), transparent 70%);
+    animation: ambDrift 34s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes ambDrift {
+    from { transform: translate3d(0,0,0) scale(1); }
+    to   { transform: translate3d(4vw,3vw,0) scale(1.12); }
+  }
+  .grain { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: .035;
+    background-image: radial-gradient(rgba(255,255,255,0.8) 0.5px, transparent 0.5px);
+    background-size: 3px 3px; mix-blend-mode: overlay; }
+  nav, .hero, .proof-bar, .section, .fw-band, #chat-section, #contact, footer, #mobile-menu { position: relative; z-index: 2; }
+
+  /* Animated network canvas behind hero */
+  #thrn-net { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+    opacity: .55; mask-image: radial-gradient(ellipse 70% 60% at 65% 45%, #000 30%, transparent 78%);
+    z-index: 0; }
+  .hero > * { position: relative; z-index: 1; }
+
+  /* Nav condenses on scroll */
+  nav { transition: height .35s var(--ease), background .35s var(--ease), border-color .35s var(--ease); }
+  nav.scrolled { height: 52px; background: rgba(10,11,15,0.92); border-bottom-color: var(--border-med); }
+  nav::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-border), transparent);
+    opacity: 0; transition: opacity .4s var(--ease); }
+  nav.scrolled::after { opacity: .7; }
+  .nav-logo-mark { transition: transform .4s var(--ease), box-shadow .4s var(--ease); }
+  .nav-logo:hover .nav-logo-mark { transform: translateY(-1px) scale(1.04); box-shadow: 0 0 0 1px var(--gold-border), 0 6px 22px rgba(124,158,122,0.22); }
+
+  /* Scroll reveal */
+  [data-reveal] { opacity: 0; transform: translateY(22px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+  [data-reveal].in { opacity: 1; transform: none; }
+
+  /* Pointer-tracked card lighting */
+  .mode-card, .fw-card, .t-card, .step, .contact-form, .demo-win {
+    position: relative;
+    transition: transform .5s var(--ease), border-color .4s var(--ease), background .4s var(--ease), box-shadow .5s var(--ease);
+  }
+  .mode-card::before, .fw-card::before, .t-card::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    transition: opacity .45s var(--ease);
+    background: radial-gradient(320px circle at var(--mx,50%) var(--my,50%), rgba(124,158,122,0.10), transparent 62%);
+  }
+  .mode-card:hover::before, .fw-card:hover::before, .t-card:hover::before { opacity: 1; }
+  .fw-card:hover, .t-card:hover { transform: translateY(-3px); border-color: var(--border-med); box-shadow: 0 18px 44px -28px rgba(0,0,0,0.9); }
+  .mode-card:hover { background: rgba(255,255,255,0.012); }
+  .mode-icon { transition: transform .45s var(--ease), color .3s, filter .45s var(--ease); }
+  .mode-card:hover .mode-icon { transform: translateY(-2px); filter: drop-shadow(0 0 10px rgba(124,158,122,0.45)); }
+  .fw-name, .mode-name { transition: color .3s var(--ease); }
+  .fw-card:hover .fw-name { color: var(--gold-text); }
+
+  /* Steps: living connector */
+  .step-num { transition: border-color .35s var(--ease), color .35s var(--ease), box-shadow .35s var(--ease), transform .35s var(--ease); }
+  .step:hover .step-num { color: var(--gold-text); border-color: var(--gold-border); transform: scale(1.06);
+    box-shadow: 0 0 0 4px rgba(124,158,122,0.08), 0 0 18px rgba(124,158,122,0.25); }
+
+  /* Proof bar shimmer on reveal */
+  .proof-val { position: relative; }
+  .proof-item { transition: background .4s var(--ease); }
+  .proof-item:hover { background: rgba(255,255,255,0.015); }
+  .proof-item:hover .proof-val { color: var(--gold-text); }
+  .proof-val { transition: color .35s var(--ease); }
+
+  /* Buttons: soft light */
+  .btn-primary { position: relative; overflow: hidden; box-shadow: 0 0 0 rgba(124,158,122,0); transition: opacity .15s, transform .25s var(--ease), box-shadow .45s var(--ease); }
+  .btn-primary:hover { box-shadow: 0 10px 34px -12px rgba(124,158,122,0.55); }
+  .btn-primary::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent); transform: skewX(-18deg); }
+  .btn-primary:hover::after { animation: sheen 1s var(--ease); }
+  @keyframes sheen { from { left: -60%; } to { left: 130%; } }
+  .nav-cta { position: relative; }
+  .nav-cta:hover { box-shadow: 0 8px 24px -10px rgba(124,158,122,0.6); }
+
+  /* Demo window: gentle float + edge glow */
+  .demo-win { box-shadow: 0 40px 90px -50px rgba(0,0,0,0.95); }
+  .demo-win::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+    background: linear-gradient(160deg, rgba(124,158,122,0.22), transparent 40%);
+    -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+    mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+    mask-composite: exclude; -webkit-mask-composite: xor; padding: 1px; opacity: .8; }
+  .dm-bubble { transition: border-color .35s var(--ease), background .35s var(--ease); }
+  .dm:hover .dm-bubble { border-color: var(--border-med); }
+  .dm-tag { transition: color .3s, border-color .3s, background .3s; }
+  .dm:hover .dm-tag { border-color: var(--gold-border); color: var(--gold-text); }
+
+  /* Section titles get a hairline that draws in */
+  .sec-eye { position: relative; display: inline-block; }
+  .sec-eye::after { content: ""; position: absolute; left: 0; bottom: -6px; height: 1px; width: 0;
+    background: linear-gradient(90deg, var(--gold), transparent); transition: width 1.1s var(--ease) .2s; }
+  [data-reveal].in .sec-eye::after, .sec-eye.in::after { width: 100%; }
+
+  /* Chat surface: alive */
+  #chat-section .composer, #chat-messages-wrap { transition: box-shadow .5s var(--ease), border-color .4s var(--ease); }
+  #chat-input:focus { outline: none; }
+  .composer:focus-within { box-shadow: 0 0 0 1px var(--gold-border), 0 16px 40px -28px rgba(124,158,122,0.5); }
+  #chat-send { transition: transform .3s var(--ease), opacity .2s, box-shadow .4s var(--ease); }
+  #chat-send:hover { transform: translateY(-1px) scale(1.04); box-shadow: 0 8px 20px -10px rgba(124,158,122,0.7); }
+
+  /* Contact form focus lighting */
+  .contact-field input, .contact-field textarea { transition: border-color .3s var(--ease), box-shadow .35s var(--ease), background .3s; }
+  .contact-field input:focus, .contact-field textarea:focus { box-shadow: 0 0 0 3px rgba(124,158,122,0.10); }
+  .contact-submit { transition: opacity .2s, transform .25s var(--ease), box-shadow .4s var(--ease); }
+  .contact-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 30px -14px rgba(124,158,122,0.6); }
+
+  /* Footer breathing dot */
+  .footer-dot { box-shadow: 0 0 0 0 rgba(124,158,122,0.5); animation: dotBreathe 3.6s ease-in-out infinite; }
+  @keyframes dotBreathe {
+    0%,100% { box-shadow: 0 0 0 0 rgba(124,158,122,0.45); opacity: .85; }
+    50%     { box-shadow: 0 0 0 6px rgba(124,158,122,0); opacity: 1; }
+  }
+
+  /* Links get a refined underline sweep */
+  .footer-links a, .nav-links a:not(.nav-cta) { position: relative; }
+  .footer-links a::after, .nav-links a:not(.nav-cta)::after {
+    content: ""; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 1px;
+    background: currentColor; transform: scaleX(0); transform-origin: left;
+    transition: transform .35s var(--ease); opacity: .5;
+  }
+  .footer-links a::after { left: 0; right: 0; bottom: -3px; }
+  .footer-links a:hover::after, .nav-links a:not(.nav-cta):hover::after { transform: scaleX(1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .amb::before, .amb::after, .footer-dot { animation: none !important; }
+    [data-reveal] { opacity: 1 !important; transform: none !important; transition: none !important; }
+    #thrn-net { display: none; }
+    .btn-primary:hover::after { animation: none !important; }
+  }
 </style>
 </head>
 <body>
