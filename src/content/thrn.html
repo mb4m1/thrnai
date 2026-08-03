@@ -1577,5 +1577,113 @@ document.addEventListener('click', (e) => {
   }
 });
 </script>
+<script nonce="__CSP_NONCE__">
+// ── Premium atmosphere: ambient light, grain, scroll reveal, hero network ─────
+(function () {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Ambient lighting + grain layers
+  const amb = document.createElement('div'); amb.className = 'amb';
+  const grain = document.createElement('div'); grain.className = 'grain';
+  document.body.appendChild(amb); document.body.appendChild(grain);
+
+  // Nav condense on scroll
+  const nav = document.querySelector('nav');
+  const onScroll = () => { if (nav) nav.classList.toggle('scrolled', window.scrollY > 12); };
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  // Scroll reveal
+  const targets = document.querySelectorAll(
+    '.section .sec-eye, .sec-title, .sec-sub, .mode-card, .fw-card, .t-card, .step, .proof-item, .demo-win, .contact-header, .contact-form, .fw-band .sec-eye'
+  );
+  targets.forEach((el, i) => {
+    if (el.closest('.hero')) return;
+    el.setAttribute('data-reveal', '');
+    el.style.transitionDelay = (Math.min(i % 6, 5) * 55) + 'ms';
+  });
+  if (!reduce && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+    document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el));
+  } else {
+    document.querySelectorAll('[data-reveal]').forEach((el) => el.classList.add('in'));
+  }
+
+  // Pointer-tracked card lighting
+  document.querySelectorAll('.mode-card, .fw-card, .t-card').forEach((card) => {
+    card.addEventListener('pointermove', (ev) => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', (ev.clientX - r.left) + 'px');
+      card.style.setProperty('--my', (ev.clientY - r.top) + 'px');
+    });
+  });
+
+  // Hero network: slow-drifting nodes with proximity links
+  const hero = document.querySelector('.hero');
+  if (hero && !reduce) {
+    const cv = document.createElement('canvas');
+    cv.id = 'thrn-net';
+    cv.setAttribute('aria-hidden', 'true');
+    hero.insertBefore(cv, hero.firstChild);
+    const ctx = cv.getContext('2d');
+    let w = 0, h = 0, dpr = 1, nodes = [], raf = 0, visible = true;
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = hero.clientWidth; h = hero.clientHeight;
+      cv.width = Math.max(1, w * dpr); cv.height = Math.max(1, h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const count = Math.max(18, Math.min(46, Math.round(w * h / 26000)));
+      nodes = Array.from({ length: count }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.12, vy: (Math.random() - 0.5) * 0.12,
+        r: 0.8 + Math.random() * 1.1, p: Math.random() * Math.PI * 2
+      }));
+    }
+
+    function frame(t) {
+      raf = requestAnimationFrame(frame);
+      if (!visible) return;
+      ctx.clearRect(0, 0, w, h);
+      for (const n of nodes) {
+        n.x += n.vx; n.y += n.vy;
+        if (n.x < 0 || n.x > w) n.vx *= -1;
+        if (n.y < 0 || n.y > h) n.vy *= -1;
+      }
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 26000) {
+            const alpha = (1 - d2 / 26000) * 0.16;
+            ctx.strokeStyle = 'rgba(124,158,122,' + alpha.toFixed(3) + ')';
+            ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          }
+        }
+      }
+      for (const n of nodes) {
+        const pulse = 0.5 + 0.5 * Math.sin(t / 1400 + n.p);
+        ctx.fillStyle = 'rgba(168,196,166,' + (0.16 + pulse * 0.3).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    resize();
+    raf = requestAnimationFrame(frame);
+    window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', () => { visible = !document.hidden; });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((e) => { visible = e[0].isIntersecting && !document.hidden; })
+        .observe(hero);
+    }
+  }
+})();
+</script>
 </body>
 </html>
