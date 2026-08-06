@@ -194,16 +194,6 @@ nav {
 .fw-name { font-size: 12.5px; font-weight: 500; color: var(--gold-text); margin-bottom: 7px; letter-spacing: 0.01em; }
 .fw-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.6; font-weight: 300; }
 
-/* ── TESTIMONIALS ─────────────────────────────────────────────── */
-.t-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 52px; }
-.t-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color .2s; }
-.t-card:hover { border-color: var(--border-med); }
-.t-text { font-size: 14.5px; color: var(--text-2); line-height: 1.75; margin-bottom: 22px; font-style: italic; font-weight: 300; }
-.t-author { display: flex; align-items: center; gap: 11px; }
-.t-av { width: 34px; height: 34px; border-radius: 50%; background: var(--gold-dim); border: 1px solid var(--gold-border); display: flex; align-items: center; justify-content: center; font-family: var(--serif); font-size: 14px; color: var(--gold-text); flex-shrink: 0; }
-.t-name { font-size: 13.5px; font-weight: 500; color: var(--text); }
-.t-role { font-size: 12px; color: var(--text-3); margin-top: 1px; }
-
 /* ── LIVE CHAT SECTION ───────────────────────────────────────── */
 #chat-section {
   background: var(--surface);
@@ -427,7 +417,6 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   .how-grid { grid-template-columns: 1fr; gap: 48px; }
   .demo-win { position: static; }
   .fw-grid { grid-template-columns: 1fr 1fr; }
-  .t-grid { grid-template-columns: 1fr; }
   .fw-band, #chat-section { padding-left: 20px; padding-right: 20px; }
   #contact { padding-left: 20px; padding-right: 20px; padding-top: 70px; }
   .contact-form { padding: 22px; }
@@ -541,17 +530,17 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   [data-reveal].in { opacity: 1; transform: none; }
 
   /* Pointer-tracked card lighting */
-  .mode-card, .fw-card, .t-card, .step, .contact-form, .demo-win {
+  .mode-card, .fw-card, .step, .contact-form, .demo-win {
     position: relative;
     transition: transform .5s var(--ease), border-color .4s var(--ease), background .4s var(--ease), box-shadow .5s var(--ease);
   }
-  .mode-card::before, .fw-card::before, .t-card::before {
+  .mode-card::before, .fw-card::before {
     content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
     transition: opacity .45s var(--ease);
     background: radial-gradient(320px circle at var(--mx,50%) var(--my,50%), rgba(124,158,122,0.10), transparent 62%);
   }
-  .mode-card:hover::before, .fw-card:hover::before, .t-card:hover::before { opacity: 1; }
-  .fw-card:hover, .t-card:hover { transform: translateY(-3px); border-color: var(--border-med); box-shadow: 0 18px 44px -28px rgba(0,0,0,0.9); }
+  .mode-card:hover::before, .fw-card:hover::before { opacity: 1; }
+  .fw-card:hover { transform: translateY(-3px); border-color: var(--border-med); box-shadow: 0 18px 44px -28px rgba(0,0,0,0.9); }
   .mode-card:hover { background: rgba(255,255,255,0.012); }
   .mode-icon { transition: transform .45s var(--ease), color .3s, filter .45s var(--ease); }
   .mode-card:hover .mode-icon { transform: translateY(-2px); filter: drop-shadow(0 0 10px rgba(124,158,122,0.45)); }
@@ -780,17 +769,6 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
   </div>
 </div>
 
-<!-- TESTIMONIALS -->
-<section class="section">
-  <div class="sec-eye">What people say</div>
-  <h2 class="sec-title">Sharp advice,<br>zero scheduling</h2>
-  <div class="t-grid">
-    <div class="t-card"><p class="t-text">"I pasted our homepage copy in and got back a line-by-line audit with specific rewrites. It was harder on our messaging than any agency we've hired."</p><div class="t-author"><div class="t-av">S</div><div><div class="t-name">Sarah K.</div><div class="t-role">Founder, B2B SaaS</div></div></div></div>
-    <div class="t-card"><p class="t-text">"Asked it to build a 90-day GTM plan after giving it our constraints — two-person team, $8k budget, mid-market focus. What came back was actually executable."</p><div class="t-author"><div class="t-av">M</div><div><div class="t-name">Marcus T.</div><div class="t-role">Head of Growth, Series A startup</div></div></div></div>
-    <div class="t-card"><p class="t-text">"The diagnostic questions it asks before giving advice are what make it different. It understands your situation before telling you what to do."</p><div class="t-author"><div class="t-av">P</div><div><div class="t-name">Priya N.</div><div class="t-role">CMO, DTC brand</div></div></div></div>
-  </div>
-</section>
-
 <!-- LIVE CHAT -->
 <section id="chat-section">
   <div class="chat-inner">
@@ -935,7 +913,7 @@ const revealObs = new IntersectionObserver((entries) => {
     }
   });
 }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
-document.querySelectorAll('.mode-card,.t-card,.fw-card,.step,.dm').forEach(el => {
+document.querySelectorAll('.mode-card,.fw-card,.step,.dm').forEach(el => {
   el.style.opacity = '0';
   el.style.transform = 'translateY(14px)';
   el.style.transition = 'opacity .5s cubic-bezier(0.16,1,0.3,1), transform .5s cubic-bezier(0.16,1,0.3,1)';
@@ -1595,7 +1573,7 @@ document.addEventListener('click', (e) => {
 
   // Scroll reveal
   const targets = document.querySelectorAll(
-    '.section .sec-eye, .sec-title, .sec-sub, .mode-card, .fw-card, .t-card, .step, .proof-item, .demo-win, .contact-header, .contact-form, .fw-band .sec-eye'
+    '.section .sec-eye, .sec-title, .sec-sub, .mode-card, .fw-card, .step, .proof-item, .demo-win, .contact-header, .contact-form, .fw-band .sec-eye'
   );
   targets.forEach((el, i) => {
     if (el.closest('.hero')) return;
@@ -1614,7 +1592,7 @@ document.addEventListener('click', (e) => {
   }
 
   // Pointer-tracked card lighting
-  document.querySelectorAll('.mode-card, .fw-card, .t-card').forEach((card) => {
+  document.querySelectorAll('.mode-card, .fw-card').forEach((card) => {
     card.addEventListener('pointermove', (ev) => {
       const r = card.getBoundingClientRect();
       card.style.setProperty('--mx', (ev.clientX - r.left) + 'px');
