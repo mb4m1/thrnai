@@ -1633,15 +1633,21 @@ document.addEventListener('click', (e) => {
     let w = 0, h = 0, dpr = 1, nodes = [], raf = 0, visible = true;
     // pointer state (px, py = smoothed cursor; strength eases 0..1)
     let ptrX = 0, ptrY = 0, tgtX = 0, tgtY = 0, strength = 0, tgtStrength = 0;
-    let lastMove = 0, hasPointer = false;
+    let lastMove = 0, hasPointer = false, lastT = 0;
     const R = 170, R2 = R * R;
+    // touch/small screens: restrained autonomous ambient motion
+    const isTouch = window.matchMedia('(hover: none)').matches ||
+      (navigator.maxTouchPoints || 0) > 0;
+    // frame-rate independent easing: k per 60fps frame -> per elapsed frames
+    const ease = (k, dt) => 1 - Math.pow(1 - k, dt);
 
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       w = hero.clientWidth; h = hero.clientHeight;
       cv.width = Math.max(1, w * dpr); cv.height = Math.max(1, h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.max(18, Math.min(64, Math.round(w * h / 18000)));
+      const cap = isTouch ? 40 : 64;
+      const count = Math.max(16, Math.min(cap, Math.round(w * h / (isTouch ? 22000 : 18000))));
       nodes = Array.from({ length: count }, () => ({
         x: Math.random() * w, y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.12, vy: (Math.random() - 0.5) * 0.12,
@@ -1650,6 +1656,7 @@ document.addEventListener('click', (e) => {
       }));
       if (!hasPointer) { ptrX = tgtX = w * 0.5; ptrY = tgtY = h * 0.45; }
     }
+
 
     hero.addEventListener('pointermove', (ev) => {
       if (ev.pointerType === 'touch') return;
