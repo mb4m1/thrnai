@@ -1356,19 +1356,121 @@ function updateDepth() {
     turns > 0 ? `${turns} turn${turns !== 1 ? 's' : ''} · ${chatMode} mode` : '';
 }
 
+// ── Attachments (images & documents) ─────────────────────────
+const MAX_ATT = 5;
+const MAX_ATT_BYTES = 8 * 1024 * 1024;
+let pendingAtts = [];
+
+function fmtBytes(n) {
+  return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+}
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error('Could not read ' + file.name));
+    fr.readAsDataURL(file);
+  });
+}
+
+function readAsText(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error('Could not read ' + file.name));
+    fr.readAsText(file);
+  });
+}
+
+async function addAttachments(files) {
+  for (const file of Array.from(files || [])) {
+    if (pendingAtts.length >= MAX_ATT) break;
+    if (file.size > MAX_ATT_BYTES) continue;
+    const type = file.type || '';
+    try {
+      if (type.startsWith('image/')) {
+        pendingAtts.push({ kind: 'image', name: file.name, size: file.size, mime: type, dataUrl: await readAsDataUrl(file) });
+      } else if (type === 'application/pdf') {
+        pendingAtts.push({ kind: 'pdf', name: file.name, size: file.size, mime: type, dataUrl: await readAsDataUrl(file) });
+      } else {
+        pendingAtts.push({ kind: 'text', name: file.name, size: file.size, mime: type || 'text/plain', text: (await readAsText(file)).slice(0, 40000) });
+      }
+    } catch (e) { /* skip unreadable file */ }
+  }
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const tray = document.getElementById('chat-attachments');
+  if (!tray) return;
+  tray.replaceChildren();
+  tray.classList.toggle('has-items', pendingAtts.length > 0);
+  pendingAtts.forEach((a, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'att-chip';
+    if (a.kind === 'image') {
+      const img = document.createElement('img');
+      img.src = a.dataUrl; img.alt = a.name;
+      chip.appendChild(img);
+    } else {
+      const doc = document.createElement('div');
+      doc.className = 'att-doc';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6');
+      svg.appendChild(p); doc.appendChild(svg);
+      chip.appendChild(doc);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'att-meta';
+    const nm = document.createElement('div'); nm.className = 'att-name'; nm.textContent = a.name;
+    const sz = document.createElement('div'); sz.className = 'att-size'; sz.textContent = fmtBytes(a.size);
+    meta.appendChild(nm); meta.appendChild(sz);
+    chip.appendChild(meta);
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'att-remove'; rm.textContent = '×';
+    rm.setAttribute('aria-label', 'Remove ' + a.name);
+    rm.addEventListener('click', () => { pendingAtts.splice(i, 1); renderAttachments(); });
+    chip.appendChild(rm);
+    tray.appendChild(chip);
+  });
+}
+
+// Build the multimodal message content the chat API forwards to the model.
+function buildUserContent(text, atts) {
+  if (!atts.length) return text;
+  const parts = [];
+  const notes = atts
+    .filter(a => a.kind === 'text')
+    .map(a => `--- Attached document: ${a.name} ---\n${a.text}`)
+    .join('\n\n');
+  parts.push({ type: 'text', text: notes ? `${text}\n\n${notes}` : text });
+  for (const a of atts) {
+    if (a.kind === 'image') parts.push({ type: 'image_url', image_url: { url: a.dataUrl } });
+    else if (a.kind === 'pdf') parts.push({ type: 'file', file: { filename: a.name, file_data: a.dataUrl } });
+  }
+  return parts;
+}
+
 async function chatSend(override) {
   const input = document.getElementById('chat-input');
   const text = (override || input.value).trim();
-  if (!text || chatBusy) return;
+  const atts = pendingAtts.slice();
+  if ((!text && !atts.length) || chatBusy) return;
   input.value = '';
   input.style.height = '42px';
+  pendingAtts = [];
+  renderAttachments();
   chatBusy = true;
   setEngineResponding(true);
   document.getElementById('chat-send').disabled = true;
 
-  addUserMsg(text);
-  chatHistory.push({ role: 'user', content: text });
+  addUserMsg(text, atts);
+  chatHistory.push({ role: 'user', content: buildUserContent(text || 'Please review the attached files.', atts) });
   showTyping();
+
 
   await new Promise(r => setTimeout(r, 320)); // brief thinking pause
   removeTyping();
