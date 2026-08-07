@@ -856,16 +856,23 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
     </div>
 
     <div class="composer">
+      <div id="chat-attachments" aria-live="polite"></div>
       <div class="composer-row">
+        <input id="chat-file" type="file" multiple hidden
+               accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/csv,text/markdown,application/json" />
+        <button id="chat-attach" type="button" data-action="attach" aria-label="Add image or document" title="Add image or document">
+          <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
         <textarea id="chat-input" aria-label="Message input" placeholder="Describe your marketing challenge…" rows="1"></textarea>
         <button id="chat-send" data-action="send" aria-label="Send">
           <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
       <div class="composer-footer">
-        <span class="composer-hint">Enter to send · Shift+Enter for new line</span>
+        <span class="composer-hint">Enter to send · Shift+Enter for new line · attach images or documents</span>
         <span id="chat-depth"></span>
       </div>
+
     </div>
     <div id="usage-meter" style="display:none"></div>
   </div>
