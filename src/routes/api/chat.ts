@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 
 interface ChatMessage {
   role: "user" | "assistant";
-  content: string;
+  // Plain text, or multimodal content blocks (image_url / file / text).
+  content: string | Array<Record<string, unknown>>;
 }
+
 
 const jsonHeaders = { "content-type": "application/json" };
 
@@ -34,13 +36,16 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         const messages = Array.isArray(body.messages) ? body.messages : [];
-        const openaiMessages: Array<{ role: string; content: string }> = [];
+        const openaiMessages: Array<{ role: string; content: unknown }> = [];
         if (body.system) openaiMessages.push({ role: "system", content: body.system });
         for (const m of messages) {
-          if (!m || typeof m.content !== "string") continue;
+          if (!m) continue;
+          const ok = typeof m.content === "string" || Array.isArray(m.content);
+          if (!ok) continue;
           if (m.role !== "user" && m.role !== "assistant") continue;
           openaiMessages.push({ role: m.role, content: m.content });
         }
+
 
         // Transient upstream/infra failures (cold starts, gateway restarts,
         // network blips) are retried with exponential backoff + jitter.

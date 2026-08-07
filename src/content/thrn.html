@@ -306,6 +306,47 @@ nav {
 .composer-hint { font-size: 11px; color: var(--text-3); }
 #chat-depth { font-size: 11px; color: var(--text-3); }
 
+/* Attachments */
+#chat-attach {
+  width: 42px; height: 42px; border-radius: 9px; flex-shrink: 0;
+  background: var(--card-2); border: 1px solid var(--border-med); cursor: pointer;
+  color: var(--text-2); display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s, transform .1s;
+}
+#chat-attach:hover:not(:disabled) { border-color: var(--gold-border); color: var(--gold-text); transform: scale(1.04); }
+#chat-attach:disabled { opacity: .35; cursor: default; transform: none; }
+#chat-attach svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+#chat-attachments { display: none; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+#chat-attachments.has-items { display: flex; }
+.att-chip {
+  display: flex; align-items: center; gap: 8px; max-width: 240px;
+  padding: 6px 8px 6px 6px; border-radius: 9px;
+  background: var(--card-2); border: 1px solid var(--border-med);
+}
+.att-chip img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; flex-shrink: 0; }
+.att-chip .att-doc {
+  width: 26px; height: 26px; border-radius: 5px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--gold-dim); color: var(--gold-text);
+}
+.att-chip .att-doc svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.att-meta { min-width: 0; }
+.att-name { font-size: 11.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-size { font-size: 10px; color: var(--text-3); }
+.att-remove {
+  background: none; border: none; cursor: pointer; color: var(--text-3);
+  font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.att-remove:hover { color: var(--text); }
+.msg-atts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.msg-att {
+  font-size: 11px; color: var(--gold-text); padding: 3px 7px; border-radius: 6px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--gold-border);
+  max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msg-att img { display: block; max-width: 180px; max-height: 130px; border-radius: 8px; }
+
+
 /* Chat error state — shown when the local chat API fails */
 .cmsg.ai .cbubble.err {
   background: rgba(224, 130, 90, 0.06);
@@ -815,16 +856,23 @@ footer { border-top: 1px solid var(--border); padding: 30px 40px; display: flex;
     </div>
 
     <div class="composer">
+      <div id="chat-attachments" aria-live="polite"></div>
       <div class="composer-row">
+        <input id="chat-file" type="file" multiple hidden
+               accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/csv,text/markdown,application/json" />
+        <button id="chat-attach" type="button" data-action="attach" aria-label="Add image or document" title="Add image or document">
+          <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
         <textarea id="chat-input" aria-label="Message input" placeholder="Describe your marketing challenge…" rows="1"></textarea>
         <button id="chat-send" data-action="send" aria-label="Send">
           <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
       <div class="composer-footer">
-        <span class="composer-hint">Enter to send · Shift+Enter for new line</span>
+        <span class="composer-hint">Enter to send · Shift+Enter for new line · attach images or documents</span>
         <span id="chat-depth"></span>
       </div>
+
     </div>
     <div id="usage-meter" style="display:none"></div>
   </div>
@@ -1097,18 +1145,37 @@ function makeAv(type) {
   return div;
 }
 
-function addUserMsg(text) {
+function addUserMsg(text, atts) {
   const msgs = document.getElementById('chat-messages');
   const wrap = document.createElement('div');
   wrap.className = 'cmsg user';
   const bubble = document.createElement('div');
   bubble.className = 'cbubble';
   bubble.textContent = text;
+  if (atts && atts.length) {
+    const tray = document.createElement('div');
+    tray.className = 'msg-atts';
+    for (const a of atts) {
+      const chip = document.createElement('div');
+      chip.className = 'msg-att';
+      if (a.kind === 'image') {
+        const img = document.createElement('img');
+        img.src = a.dataUrl;
+        img.alt = a.name;
+        chip.appendChild(img);
+      } else {
+        chip.textContent = '📄 ' + a.name;
+      }
+      tray.appendChild(chip);
+    }
+    bubble.appendChild(tray);
+  }
   wrap.appendChild(makeAv('usr'));
   wrap.appendChild(bubble);
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
 }
+
 
 function showTyping() {
   const msgs = document.getElementById('chat-messages');
@@ -1289,19 +1356,121 @@ function updateDepth() {
     turns > 0 ? `${turns} turn${turns !== 1 ? 's' : ''} · ${chatMode} mode` : '';
 }
 
+// ── Attachments (images & documents) ─────────────────────────
+const MAX_ATT = 5;
+const MAX_ATT_BYTES = 8 * 1024 * 1024;
+let pendingAtts = [];
+
+function fmtBytes(n) {
+  return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+}
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error('Could not read ' + file.name));
+    fr.readAsDataURL(file);
+  });
+}
+
+function readAsText(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = () => reject(new Error('Could not read ' + file.name));
+    fr.readAsText(file);
+  });
+}
+
+async function addAttachments(files) {
+  for (const file of Array.from(files || [])) {
+    if (pendingAtts.length >= MAX_ATT) break;
+    if (file.size > MAX_ATT_BYTES) continue;
+    const type = file.type || '';
+    try {
+      if (type.startsWith('image/')) {
+        pendingAtts.push({ kind: 'image', name: file.name, size: file.size, mime: type, dataUrl: await readAsDataUrl(file) });
+      } else if (type === 'application/pdf') {
+        pendingAtts.push({ kind: 'pdf', name: file.name, size: file.size, mime: type, dataUrl: await readAsDataUrl(file) });
+      } else {
+        pendingAtts.push({ kind: 'text', name: file.name, size: file.size, mime: type || 'text/plain', text: (await readAsText(file)).slice(0, 40000) });
+      }
+    } catch (e) { /* skip unreadable file */ }
+  }
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const tray = document.getElementById('chat-attachments');
+  if (!tray) return;
+  tray.replaceChildren();
+  tray.classList.toggle('has-items', pendingAtts.length > 0);
+  pendingAtts.forEach((a, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'att-chip';
+    if (a.kind === 'image') {
+      const img = document.createElement('img');
+      img.src = a.dataUrl; img.alt = a.name;
+      chip.appendChild(img);
+    } else {
+      const doc = document.createElement('div');
+      doc.className = 'att-doc';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6');
+      svg.appendChild(p); doc.appendChild(svg);
+      chip.appendChild(doc);
+    }
+    const meta = document.createElement('div');
+    meta.className = 'att-meta';
+    const nm = document.createElement('div'); nm.className = 'att-name'; nm.textContent = a.name;
+    const sz = document.createElement('div'); sz.className = 'att-size'; sz.textContent = fmtBytes(a.size);
+    meta.appendChild(nm); meta.appendChild(sz);
+    chip.appendChild(meta);
+    const rm = document.createElement('button');
+    rm.type = 'button'; rm.className = 'att-remove'; rm.textContent = '×';
+    rm.setAttribute('aria-label', 'Remove ' + a.name);
+    rm.addEventListener('click', () => { pendingAtts.splice(i, 1); renderAttachments(); });
+    chip.appendChild(rm);
+    tray.appendChild(chip);
+  });
+}
+
+// Build the multimodal message content the chat API forwards to the model.
+function buildUserContent(text, atts) {
+  if (!atts.length) return text;
+  const parts = [];
+  const notes = atts
+    .filter(a => a.kind === 'text')
+    .map(a => `--- Attached document: ${a.name} ---\n${a.text}`)
+    .join('\n\n');
+  parts.push({ type: 'text', text: notes ? `${text}\n\n${notes}` : text });
+  for (const a of atts) {
+    if (a.kind === 'image') parts.push({ type: 'image_url', image_url: { url: a.dataUrl } });
+    else if (a.kind === 'pdf') parts.push({ type: 'file', file: { filename: a.name, file_data: a.dataUrl } });
+  }
+  return parts;
+}
+
 async function chatSend(override) {
   const input = document.getElementById('chat-input');
   const text = (override || input.value).trim();
-  if (!text || chatBusy) return;
+  const atts = pendingAtts.slice();
+  if ((!text && !atts.length) || chatBusy) return;
   input.value = '';
   input.style.height = '42px';
+  pendingAtts = [];
+  renderAttachments();
   chatBusy = true;
   setEngineResponding(true);
   document.getElementById('chat-send').disabled = true;
 
-  addUserMsg(text);
-  chatHistory.push({ role: 'user', content: text });
+  addUserMsg(text, atts);
+  chatHistory.push({ role: 'user', content: buildUserContent(text || 'Please review the attached files.', atts) });
   showTyping();
+
 
   await new Promise(r => setTimeout(r, 320)); // brief thinking pause
   removeTyping();
@@ -1368,6 +1537,28 @@ chatInput.addEventListener('input', () => {
   chatInput.style.height = 'auto';
   chatInput.style.height = Math.min(chatInput.scrollHeight, 130) + 'px';
 });
+
+// File picker + paste + drag/drop for images and documents
+const chatFile = document.getElementById('chat-file');
+if (chatFile) {
+  chatFile.addEventListener('change', async () => {
+    await addAttachments(chatFile.files);
+    chatFile.value = '';
+  });
+}
+chatInput.addEventListener('paste', (e) => {
+  const files = Array.from(e.clipboardData?.files || []);
+  if (files.length) { e.preventDefault(); addAttachments(files); }
+});
+const composerEl = document.querySelector('#chat-section .composer');
+if (composerEl) {
+  composerEl.addEventListener('dragover', (e) => { e.preventDefault(); });
+  composerEl.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.length) { e.preventDefault(); addAttachments(e.dataTransfer.files); }
+  });
+}
+
+
 
 // Init
 chatSetMode('consult');
@@ -1578,6 +1769,8 @@ document.addEventListener('click', (e) => {
     case 'set-mode': chatSetMode(el.getAttribute('data-mode')); break;
     case 'reset-chat': chatReset(); break;
     case 'send': chatSend(); break;
+    case 'attach': document.getElementById('chat-file')?.click(); break;
+
     case 'send-q': chatSend(el.dataset.q); break;
   }
 });
