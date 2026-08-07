@@ -1538,6 +1538,28 @@ chatInput.addEventListener('input', () => {
   chatInput.style.height = Math.min(chatInput.scrollHeight, 130) + 'px';
 });
 
+// File picker + paste + drag/drop for images and documents
+const chatFile = document.getElementById('chat-file');
+if (chatFile) {
+  chatFile.addEventListener('change', async () => {
+    await addAttachments(chatFile.files);
+    chatFile.value = '';
+  });
+}
+chatInput.addEventListener('paste', (e) => {
+  const files = Array.from(e.clipboardData?.files || []);
+  if (files.length) { e.preventDefault(); addAttachments(files); }
+});
+const composerEl = document.querySelector('#chat-section .composer');
+if (composerEl) {
+  composerEl.addEventListener('dragover', (e) => { e.preventDefault(); });
+  composerEl.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.length) { e.preventDefault(); addAttachments(e.dataTransfer.files); }
+  });
+}
+
+
+
 // Init
 chatSetMode('consult');
 
