@@ -306,6 +306,47 @@ nav {
 .composer-hint { font-size: 11px; color: var(--text-3); }
 #chat-depth { font-size: 11px; color: var(--text-3); }
 
+/* Attachments */
+#chat-attach {
+  width: 42px; height: 42px; border-radius: 9px; flex-shrink: 0;
+  background: var(--card-2); border: 1px solid var(--border-med); cursor: pointer;
+  color: var(--text-2); display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, color .15s, transform .1s;
+}
+#chat-attach:hover:not(:disabled) { border-color: var(--gold-border); color: var(--gold-text); transform: scale(1.04); }
+#chat-attach:disabled { opacity: .35; cursor: default; transform: none; }
+#chat-attach svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+#chat-attachments { display: none; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+#chat-attachments.has-items { display: flex; }
+.att-chip {
+  display: flex; align-items: center; gap: 8px; max-width: 240px;
+  padding: 6px 8px 6px 6px; border-radius: 9px;
+  background: var(--card-2); border: 1px solid var(--border-med);
+}
+.att-chip img { width: 26px; height: 26px; object-fit: cover; border-radius: 5px; flex-shrink: 0; }
+.att-chip .att-doc {
+  width: 26px; height: 26px; border-radius: 5px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--gold-dim); color: var(--gold-text);
+}
+.att-chip .att-doc svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.att-meta { min-width: 0; }
+.att-name { font-size: 11.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-size { font-size: 10px; color: var(--text-3); }
+.att-remove {
+  background: none; border: none; cursor: pointer; color: var(--text-3);
+  font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.att-remove:hover { color: var(--text); }
+.msg-atts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.msg-att {
+  font-size: 11px; color: var(--gold-text); padding: 3px 7px; border-radius: 6px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--gold-border);
+  max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msg-att img { display: block; max-width: 180px; max-height: 130px; border-radius: 8px; }
+
+
 /* Chat error state — shown when the local chat API fails */
 .cmsg.ai .cbubble.err {
   background: rgba(224, 130, 90, 0.06);
