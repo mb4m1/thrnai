@@ -1145,18 +1145,37 @@ function makeAv(type) {
   return div;
 }
 
-function addUserMsg(text) {
+function addUserMsg(text, atts) {
   const msgs = document.getElementById('chat-messages');
   const wrap = document.createElement('div');
   wrap.className = 'cmsg user';
   const bubble = document.createElement('div');
   bubble.className = 'cbubble';
   bubble.textContent = text;
+  if (atts && atts.length) {
+    const tray = document.createElement('div');
+    tray.className = 'msg-atts';
+    for (const a of atts) {
+      const chip = document.createElement('div');
+      chip.className = 'msg-att';
+      if (a.kind === 'image') {
+        const img = document.createElement('img');
+        img.src = a.dataUrl;
+        img.alt = a.name;
+        chip.appendChild(img);
+      } else {
+        chip.textContent = '📄 ' + a.name;
+      }
+      tray.appendChild(chip);
+    }
+    bubble.appendChild(tray);
+  }
   wrap.appendChild(makeAv('usr'));
   wrap.appendChild(bubble);
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
 }
+
 
 function showTyping() {
   const msgs = document.getElementById('chat-messages');
