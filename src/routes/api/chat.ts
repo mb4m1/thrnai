@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 
 interface ChatMessage {
   role: "user" | "assistant";
-  content: string;
+  // Plain text, or multimodal content blocks (image_url / file / text).
+  content: string | Array<Record<string, unknown>>;
 }
+
 
 const jsonHeaders = { "content-type": "application/json" };
 
