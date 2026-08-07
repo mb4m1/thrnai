@@ -1769,6 +1769,8 @@ document.addEventListener('click', (e) => {
     case 'set-mode': chatSetMode(el.getAttribute('data-mode')); break;
     case 'reset-chat': chatReset(); break;
     case 'send': chatSend(); break;
+    case 'attach': document.getElementById('chat-file')?.click(); break;
+
     case 'send-q': chatSend(el.dataset.q); break;
   }
 });
