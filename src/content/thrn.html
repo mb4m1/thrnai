@@ -1944,23 +1944,6 @@ document.addEventListener('click', (e) => {
         .observe(hero);
     }
   }
-  // SEO snippet preview: mirror live meta title/description
-  const metaTitle = document.querySelector('title')?.textContent || '';
-  const metaDesc = document.querySelector('meta[name="description"]')?.getAttribute('content') || '';
-  const serpTitle = document.getElementById('serp-title');
-  const serpDesc = document.getElementById('serp-desc');
-  const serpTitleLen = document.getElementById('serp-title-len');
-  const serpDescLen = document.getElementById('serp-desc-len');
-  if (serpTitle) serpTitle.textContent = metaTitle;
-  if (serpDesc) serpDesc.textContent = metaDesc;
-  if (serpTitleLen) {
-    serpTitleLen.textContent = String(metaTitle.length);
-    serpTitleLen.parentElement.className = 'serp-pill ' + (metaTitle.length > 60 ? 'warn' : 'ok');
-  }
-  if (serpDescLen) {
-    serpDescLen.textContent = String(metaDesc.length);
-    serpDescLen.parentElement.className = 'serp-pill ' + (metaDesc.length > 160 ? 'warn' : 'ok');
-  }
 })();
 </script>
 </body>
