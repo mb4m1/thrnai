@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://thrnai.lovable.app/sitemap.xml
