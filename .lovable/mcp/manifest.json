@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://oynbmupayxkpsfathwtb.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "thrn",
+      "version": "0.1.0",
+      "title": "THRN"
+    },
+    "tools": [
+      {
+        "name": "thrn_overview",
+        "title": "THRN overview",
+        "description": "Describe what THRN is, the engine it runs on, and the kinds of marketing work it can do.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "marketing_kpis",
+        "title": "Calculate marketing KPIs",
+        "description": "Compute CTR, CPC, CPM, CVR, CAC, AOV and ROAS from raw campaign numbers. Any metric whose inputs are missing is omitted.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "impressions": {
+              "description": "Total impressions.",
+              "type": "number",
+              "minimum": 0
+            },
+            "clicks": {
+              "description": "Total clicks.",
+              "type": "number",
+              "minimum": 0
+            },
+            "spend": {
+              "description": "Total ad spend.",
+              "type": "number",
+              "minimum": 0
+            },
+            "conversions": {
+              "description": "Total conversions.",
+              "type": "number",
+              "minimum": 0
+            },
+            "revenue": {
+              "description": "Total revenue attributed.",
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "run_marketing_audit",
+        "title": "Run marketing audit",
+        "description": "Run a THRN senior-marketer audit over a campaign dataset (paste metrics as text) and return the written audit.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": false,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "dataset": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Campaign metrics as text: channel, spend, impressions, clicks, conversions, revenue, period."
+            },
+            "goal": {
+              "description": "Optional business goal or constraint to audit against.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "dataset"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
