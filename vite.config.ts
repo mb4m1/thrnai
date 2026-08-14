@@ -9,6 +9,13 @@ import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
 export default defineConfig({
   plugins: [mcpPlugin()],
+  vite: {
+    build: {
+      rollupOptions: {
+        external: ["cloudflare:workers"],
+      },
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
