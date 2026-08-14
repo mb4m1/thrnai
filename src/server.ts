@@ -3,6 +3,24 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
+type WorkersAI = {
+  run: (
+    model: string,
+    input: { messages: Array<{ role: string; content: string }>; max_tokens: number },
+  ) => Promise<unknown>;
+};
+
+type CloudflareRuntimeEnv = {
+  AI?: WorkersAI;
+};
+
+declare global {
+  // Cloudflare passes bindings to this Worker fetch() entrypoint. TanStack Start's
+  // route handlers don't expose that env argument directly, so keep the current
+  // Worker bindings available to server routes for the duration of the request.
+  var __THRN_CF_ENV: CloudflareRuntimeEnv | undefined;
+}
+
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
@@ -47,6 +65,7 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      globalThis.__THRN_CF_ENV = env as CloudflareRuntimeEnv;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
