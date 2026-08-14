@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { env } from "cloudflare:workers";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -7,6 +6,21 @@ interface ChatMessage {
 }
 
 const jsonHeaders = { "content-type": "application/json" };
+
+type WorkersAI = {
+  run: (
+    model: string,
+    input: { messages: Array<{ role: string; content: string }>; max_tokens: number },
+  ) => Promise<unknown>;
+};
+
+type CloudflareRuntimeEnv = {
+  AI?: WorkersAI;
+};
+
+declare global {
+  var __THRN_CF_ENV: CloudflareRuntimeEnv | undefined;
+}
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -54,7 +68,12 @@ export const Route = createFileRoute("/api/chat")({
         ];
 
         try {
-          const result = await env.AI.run("@cf/openai/gpt-oss-20b", {
+          const ai = globalThis.__THRN_CF_ENV?.AI;
+          if (!ai) {
+            throw new Error("Workers AI binding AI is unavailable at runtime");
+          }
+
+          const result = await ai.run("@cf/openai/gpt-oss-20b", {
             messages: aiMessages,
             max_tokens: Math.min(body.max_tokens ?? 1000, 2000),
           });
