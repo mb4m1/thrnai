@@ -61,11 +61,13 @@ export const Route = createFileRoute("/api/chat")({
 
           const output = result as {
             response?: string;
+            output_text?: string;
             result?: { response?: string };
           };
 
           const text =
             output.response ??
+            output.output_text ??
             output.result?.response ??
             "THRN couldn't generate a response.";
 
@@ -91,12 +93,14 @@ export const Route = createFileRoute("/api/chat")({
         } catch (error) {
           console.error("[api/chat] Workers AI failed", error);
 
+          const message =
+            error instanceof Error ? error.message : String(error);
+
           return new Response(
             JSON.stringify({
               error: {
                 code: "ai_error",
-                message:
-                  "THRN couldn't reach the AI engine. Please try again.",
+                message: `THRN couldn't reach the AI engine: ${message}`,
               },
             }),
             { status: 503, headers: jsonHeaders },
