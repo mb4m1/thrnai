@@ -18,17 +18,10 @@ type CloudflareRuntimeEnv = {
   AI?: WorkersAI;
 };
 
-declare global {
-  // src/server.ts captures the real Cloudflare Worker env before TanStack
-  // executes this route. Using that captured env is more reliable than the
-  // cloudflare:workers module binding inside TanStack server route handlers.
-  var __THRN_CF_ENV: CloudflareRuntimeEnv | undefined;
-}
-
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
-      POST: async ({ request }) => {
+      POST: async ({ request, context }) => {
         let body: {
           system?: string;
           messages?: ChatMessage[];
@@ -71,7 +64,8 @@ export const Route = createFileRoute("/api/chat")({
         ];
 
         try {
-          const ai = globalThis.__THRN_CF_ENV?.AI;
+          const cloudflareEnv = context.cloudflare as CloudflareRuntimeEnv;
+          const ai = cloudflareEnv?.AI;
           if (!ai) {
             throw new Error("Workers AI binding AI is unavailable at runtime");
           }
