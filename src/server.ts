@@ -14,15 +14,24 @@ type CloudflareRuntimeEnv = {
   AI?: WorkersAI;
 };
 
-declare global {
-  // Cloudflare passes bindings to this Worker fetch() entrypoint. TanStack Start's
-  // route handlers don't expose that env argument directly, so keep the current
-  // Worker bindings available to server routes for the duration of the request.
-  var __THRN_CF_ENV: CloudflareRuntimeEnv | undefined;
+type ServerRequestOptions = {
+  context?: {
+    cloudflare: CloudflareRuntimeEnv;
+  };
+};
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    server: {
+      requestContext: {
+        cloudflare: CloudflareRuntimeEnv;
+      };
+    };
+  }
 }
 
 type ServerEntry = {
-  fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
+  fetch: (request: Request, options?: ServerRequestOptions) => Promise<Response> | Response;
 };
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
@@ -63,11 +72,16 @@ function isH3SwallowedErrorBody(body: string): boolean {
 }
 
 export default {
-  async fetch(request: Request, env: unknown, ctx: unknown) {
+  async fetch(request: Request, env: unknown, _ctx: unknown) {
     try {
-      globalThis.__THRN_CF_ENV = env as CloudflareRuntimeEnv;
+      const cloudflareEnv = env as CloudflareRuntimeEnv;
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
+      // TanStack Start's server route handlers receive request context, not the
+      // raw Cloudflare Worker env argument. Pass the real Worker bindings into
+      // that context so routes can reliably access env.AI at request time.
+      const response = await handler.fetch(request, {
+        context: { cloudflare: cloudflareEnv },
+      });
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
