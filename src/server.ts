@@ -3,35 +3,8 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
-type WorkersAI = {
-  run: (
-    model: string,
-    input: { messages: Array<{ role: string; content: string }>; max_tokens: number },
-  ) => Promise<unknown>;
-};
-
-type CloudflareRuntimeEnv = {
-  AI?: WorkersAI;
-};
-
-type ServerRequestOptions = {
-  context?: {
-    cloudflare: CloudflareRuntimeEnv;
-  };
-};
-
-declare module "@tanstack/react-router" {
-  interface Register {
-    server: {
-      requestContext: {
-        cloudflare: CloudflareRuntimeEnv;
-      };
-    };
-  }
-}
-
 type ServerEntry = {
-  fetch: (request: Request, options?: ServerRequestOptions) => Promise<Response> | Response;
+  fetch: (request: Request, options?: unknown) => Promise<Response> | Response;
 };
 
 let serverEntryPromise: Promise<ServerEntry> | undefined;
@@ -72,16 +45,10 @@ function isH3SwallowedErrorBody(body: string): boolean {
 }
 
 export default {
-  async fetch(request: Request, env: unknown, _ctx: unknown) {
+  async fetch(request: Request, _env: unknown, _ctx: unknown) {
     try {
-      const cloudflareEnv = env as CloudflareRuntimeEnv;
       const handler = await getServerEntry();
-      // TanStack Start's server route handlers receive request context, not the
-      // raw Cloudflare Worker env argument. Pass the real Worker bindings into
-      // that context so routes can reliably access env.AI at request time.
-      const response = await handler.fetch(request, {
-        context: { cloudflare: cloudflareEnv },
-      });
+      const response = await handler.fetch(request);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
