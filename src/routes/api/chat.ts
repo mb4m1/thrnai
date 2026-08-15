@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { env } from "cloudflare:workers";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -14,14 +15,10 @@ type WorkersAI = {
   ) => Promise<unknown>;
 };
 
-type CloudflareRuntimeEnv = {
-  AI?: WorkersAI;
-};
-
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
-      POST: async ({ request, context }) => {
+      POST: async ({ request }) => {
         let body: {
           system?: string;
           messages?: ChatMessage[];
@@ -64,8 +61,7 @@ export const Route = createFileRoute("/api/chat")({
         ];
 
         try {
-          const cloudflareEnv = context.cloudflare as CloudflareRuntimeEnv;
-          const ai = cloudflareEnv?.AI;
+          const ai = env.AI as WorkersAI | undefined;
           if (!ai) {
             throw new Error("Workers AI binding AI is unavailable at runtime");
           }
