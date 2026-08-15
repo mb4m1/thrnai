@@ -163,11 +163,19 @@ export const Route = createFileRoute("/api/chat")({
             error: diagnostic,
           });
 
+          const diagnosticText = [
+            diagnostic.message,
+            diagnostic.code ? `code=${String(diagnostic.code)}` : null,
+            diagnostic.status ? `status=${String(diagnostic.status)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" | ");
+
           return new Response(
             JSON.stringify({
               error: {
                 code: "ai_error",
-                message: "THRN couldn't generate a response.",
+                message: `THRN couldn't reach the AI engine: ${diagnosticText}`,
                 diagnostic: {
                   name: diagnostic.name,
                   message: diagnostic.message,
