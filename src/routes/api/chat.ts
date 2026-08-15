@@ -11,9 +11,47 @@ const jsonHeaders = { "content-type": "application/json" };
 type WorkersAI = {
   run: (
     model: string,
-    input: { messages: Array<{ role: string; content: string }>; max_tokens: number },
+    input: {
+      messages: Array<{ role: string; content: string }>;
+      max_tokens: number;
+    },
   ) => Promise<unknown>;
 };
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    const details = error as Error & {
+      code?: unknown;
+      status?: unknown;
+      statusCode?: unknown;
+      cause?: unknown;
+      body?: unknown;
+    };
+
+    return {
+      name: error.name,
+      message: error.message,
+      code: details.code ?? null,
+      status: details.status ?? details.statusCode ?? null,
+      body: details.body ?? null,
+      cause:
+        details.cause instanceof Error
+          ? { name: details.cause.name, message: details.cause.message }
+          : details.cause ?? null,
+      stack: error.stack ?? null,
+    };
+  }
+
+  return {
+    name: typeof error,
+    message: String(error),
+    code: null,
+    status: null,
+    body: null,
+    cause: null,
+    stack: null,
+  };
+}
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -66,9 +104,23 @@ export const Route = createFileRoute("/api/chat")({
             throw new Error("Workers AI binding AI is unavailable at runtime");
           }
 
-          const result = await ai.run("@cf/openai/gpt-oss-20b", {
+          const model = "@cf/openai/gpt-oss-20b";
+          const maxTokens = Math.min(body.max_tokens ?? 1000, 2000);
+
+          console.info("[api/chat] Calling Workers AI", {
+            model,
+            messageCount: aiMessages.length,
+            maxTokens,
+          });
+
+          const result = await ai.run(model, {
             messages: aiMessages,
-            max_tokens: Math.min(body.max_tokens ?? 1000, 2000),
+            max_tokens: maxTokens,
+          });
+
+          console.info("[api/chat] Workers AI returned successfully", {
+            model,
+            resultType: typeof result,
           });
 
           const output = result as {
@@ -103,16 +155,27 @@ export const Route = createFileRoute("/api/chat")({
             },
           });
         } catch (error) {
-          console.error("[api/chat] Workers AI failed", error);
+          const diagnostic = serializeError(error);
 
-          const message =
-            error instanceof Error ? error.message : String(error);
+          console.error("[api/chat] Workers AI FAILED", {
+            model: "@cf/openai/gpt-oss-20b",
+            messageCount: aiMessages.length,
+            error: diagnostic,
+          });
 
           return new Response(
             JSON.stringify({
               error: {
                 code: "ai_error",
-                message: `THRN couldn't reach the AI engine: ${message}`,
+                message: "THRN couldn't generate a response.",
+                diagnostic: {
+                  name: diagnostic.name,
+                  message: diagnostic.message,
+                  code: diagnostic.code,
+                  status: diagnostic.status,
+                  body: diagnostic.body,
+                  cause: diagnostic.cause,
+                },
               },
             }),
             { status: 503, headers: jsonHeaders },
