@@ -12,15 +12,4 @@ export default defineConfig({
     cloudflare({ viteEnvironment: { name: "ssr" } }),
     mcpPlugin(),
   ],
-  vite: {
-    build: {
-      rollupOptions: {
-        external: ["cloudflare:workers"],
-      },
-    },
-  },
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    server: { entry: "server" },
-  },
 });
