@@ -3,7 +3,7 @@
   "name": "thrnai",
   "compatibility_date": "2026-08-15",
   "compatibility_flags": ["nodejs_compat"],
-  "main": ".output/server/index.mjs",
+  "main": "@tanstack/react-start/server-entry",
   "assets": {
     "directory": ".output/public",
     "binding": "ASSETS",
