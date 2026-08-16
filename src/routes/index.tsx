@@ -39,6 +39,15 @@ export function patchChatMarkdownRenderer(html: string): string {
   // Only allow the exact tag form (no attributes) so HTML safety is preserved.
   text = text.replace(/&lt;br\\s*\\/?&gt;/gi, '<br>');
 
+  // Keep chat output clean: remove Markdown bullet markers instead of
+  // rendering visible dots, while preserving the actual text.
+  text = text.replace(/^[\\-•]\\s+/gm, '');
+
+  // Do not expose model-generated follow-up controls in the chat transcript.
+  // The follow-up section is an internal suggestion and should not be shown as
+  // a user-facing "Which customer..." prompt.
+  text = text.replace(/\\n?Follow-ups?:[\\s\\S]*$/i, '');
+
   // Render standard Markdown tables inside a horizontally scrollable wrapper.
   // This keeps wide audit tables usable on phones instead of exposing raw | pipes.
   text = text.replace(/(?:^|\\n)(\\|[^\\n]+\\|\\n\\|(?:\\s*:?-+:?\\s*\\|)+\\n(?:\\|[^\\n]+\\|\\n?)+)/g, (_, block) => {
