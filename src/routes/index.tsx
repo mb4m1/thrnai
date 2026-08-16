@@ -67,9 +67,9 @@ export function patchChatMarkdownRenderer(html: string): string {
     const cells = (row) => row.replace(/^\\|/,'').replace(/\\|$/,'').split('|').map(c => c.trim());
     const headers = cells(rows[0]);
     const bodyRows = rows.slice(2).map(cells);
-    const headHtml = headers.map(c => `<th style="padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap">${c}</th>`).join('');
-    const bodyHtml = bodyRows.map(row => `<tr>${row.map(c => `<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top">${c}</td>`).join('')}</tr>`).join('');
-    return `<div style="max-width:100%;overflow-x:auto;margin:10px 0;-webkit-overflow-scrolling:touch"><table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+    const headHtml = headers.map(c => `<th style="padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap">\${c}</th>`).join('');
+    const bodyHtml = bodyRows.map(row => `<tr>\${row.map(c => `<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top">\${c}</td>`).join('')}</tr>`).join('');
+    return `<div style="max-width:100%;overflow-x:auto;margin:10px 0;-webkit-overflow-scrolling:touch"><table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>\${headHtml}</tr></thead><tbody>\${bodyHtml}</tbody></table></div>`;
   });
 
   // Headers
