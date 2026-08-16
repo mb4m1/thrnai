@@ -15,21 +15,24 @@ type WorkersAI = {
 function cleanAIText(text: string): string {
   let cleaned = text.trim();
 
-  // GPT-OSS can include its internal channel labels in prompt-mode output.
-  // Never expose the analysis/reasoning section to the user.
-  const finalMarker = /(?:^|\n)\s*(?:assistant\.)?final\s*:?[ \t]*\n?/i;
+  // GPT-OSS prompt mode can expose its internal channel labels as plain text.
+  // The model may emit variants such as assistant.analysis / assistantanalysis
+  // followed later by assistant.final / assistantfinal. Only show the final
+  // channel to the user when one is present.
+  const finalMarker = /(?:^|\n|\s)(?:assistant[.\s]*)?final\s*:?[ \t]*(?:\n|$)/i;
   const finalMatch = cleaned.match(finalMarker);
   if (finalMatch && finalMatch.index !== undefined) {
     cleaned = cleaned.slice(finalMatch.index + finalMatch[0].length).trim();
   } else {
-    // If there is no explicit final channel, remove common internal analysis
-    // labels while preserving the actual user-facing text.
+    // No final marker: remove a leading internal analysis marker if present.
     cleaned = cleaned
-      .replace(/^\s*assistant\.analysis\s*\n?/i, "")
-      .replace(/^\s*assistant\.final\s*\n?/i, "")
+      .replace(/^\s*assistant[.\s]*analysis\s*:?[ \t]*(?:\n|$)/i, "")
       .trim();
   }
 
+  // If the model produced both analysis prose and an un-delimited final marker
+  // (for example "assistantanalysis...assistantfinal..."), the logic above
+  // catches the final marker even without punctuation/newlines.
   return cleaned;
 }
 
