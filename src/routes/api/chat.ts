@@ -15,20 +15,37 @@ type WorkersAI = {
 function cleanAIText(text: string): string {
   let cleaned = text.trim();
 
-  // GPT-OSS prompt mode may expose channel labels without punctuation or
-  // whitespace, e.g. "assistantanalysis...assistantfinalThanks...".
-  // If an explicit assistant final channel exists, discard everything before it.
-  const assistantFinal = /assistant(?:[.\s]*)final\s*:?[ \t]*/i;
-  const finalMatch = cleaned.match(assistantFinal);
-  if (finalMatch && finalMatch.index !== undefined) {
-    cleaned = cleaned.slice(finalMatch.index + finalMatch[0].length).trim();
+  // GPT-OSS can expose its internal channel labels in several forms:
+  // assistant.analysis, assistantanalysis, assistant.final, assistantfinal,
+  // and can sometimes append another analysis segment after the final text.
+  // Keep ONLY the final channel and stop before any later analysis channel.
+  const finalMarker = /assistant(?:[.\s:_-]*)final\s*:?[ \t]*/gi;
+  const analysisMarker = /assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/gi;
+  const finalMatches = [...cleaned.matchAll(finalMarker)];
+
+  if (finalMatches.length > 0) {
+    const finalMatch = finalMatches[finalMatches.length - 1];
+    const start = (finalMatch.index ?? 0) + finalMatch[0].length;
+    cleaned = cleaned.slice(start).trim();
+
+    const trailingAnalysis = analysisMarker.exec(cleaned);
+    if (trailingAnalysis?.index !== undefined) {
+      cleaned = cleaned.slice(0, trailingAnalysis.index).trim();
+    }
   } else {
-    // If there is no final marker, at least remove a leading internal analysis
-    // marker rather than exposing the channel name itself.
-    cleaned = cleaned
-      .replace(/^\s*assistant(?:[.\s]*)analysis\s*:?[ \t]*/i, "")
-      .trim();
+    // No final marker: remove any exposed analysis marker and everything after
+    // it when it appears before the actual answer.
+    const leadingAnalysis = cleaned.match(analysisMarker);
+    if (leadingAnalysis?.index !== undefined) {
+      cleaned = cleaned.slice(leadingAnalysis.index + leadingAnalysis[0].length).trim();
+    }
   }
+
+  // Remove any remaining channel labels that may be left at boundaries.
+  cleaned = cleaned
+    .replace(/^\s*assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/i, "")
+    .replace(/^\s*assistant(?:[.\s:_-]*)final\s*:?[ \t]*/i, "")
+    .trim();
 
   return cleaned;
 }
