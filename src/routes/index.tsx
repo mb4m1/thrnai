@@ -30,8 +30,7 @@ export function buildCsp(nonce: string): string {
 /**
  * The shipped THRN page has its renderer embedded in a single HTML document.
  * Keep the source page unchanged and apply this small compatibility patch at
- * the response boundary so Markdown tables and model-emitted <br> tags render
- * correctly on narrow/mobile screens too.
+ * the response boundary so Markdown output stays clean and readable on phones.
  */
 export function patchChatMarkdownRenderer(html: string): string {
   const needle = "  // Headers\n  text = text.replace(/^## (.+)$/gm, '<h4>$1</h4>');";
@@ -51,6 +50,13 @@ export function patchChatMarkdownRenderer(html: string): string {
 
   // Render single-emphasis Markdown cleanly instead of exposing literal * marks.
   text = text.replace(/(^|[\\s(])\\*([^*\\n]+)\\*(?=[\\s).,!?:;]|$)/g, '$1<strong>$2</strong>');
+
+  // Keep generated paragraphs and list content inside the mobile card width.
+  // This prevents long examples such as "(e.g., traffic...)" from being
+  // clipped off-screen as seen in the plan-mode diagnostic list.
+  text = text.replace(/<p([^>]*)>/gi, '<p$1 style="white-space:normal;overflow-wrap:anywhere;word-break:break-word;max-width:100%;">');
+  text = text.replace(/<li([^>]*)>/gi, '<li$1 style="white-space:normal;overflow-wrap:anywhere;word-break:break-word;max-width:100%;">');
+  text = text.replace(/<div([^>]*)>/gi, '<div$1 style="max-width:100%;overflow-wrap:anywhere;word-break:break-word;">');
 
   // Do not expose model-generated follow-up controls in the chat transcript.
   // The follow-up section is an internal suggestion and should not be shown as
