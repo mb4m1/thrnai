@@ -53,6 +53,71 @@ function serializeError(error: unknown) {
   };
 }
 
+function extractAIText(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+
+  const output = result as Record<string, unknown>;
+
+  if (typeof output.response === "string" && output.response.trim()) {
+    return output.response;
+  }
+
+  if (typeof output.output_text === "string" && output.output_text.trim()) {
+    return output.output_text;
+  }
+
+  const nestedResult = output.result;
+  if (nestedResult && typeof nestedResult === "object") {
+    const nested = nestedResult as Record<string, unknown>;
+    if (typeof nested.response === "string" && nested.response.trim()) {
+      return nested.response;
+    }
+    if (
+      typeof nested.output_text === "string" &&
+      nested.output_text.trim()
+    ) {
+      return nested.output_text;
+    }
+  }
+
+  const choices = output.choices;
+  if (Array.isArray(choices)) {
+    const first = choices[0];
+    if (first && typeof first === "object") {
+      const message = (first as Record<string, unknown>).message;
+      if (message && typeof message === "object") {
+        const content = (message as Record<string, unknown>).content;
+        if (typeof content === "string" && content.trim()) return content;
+      }
+    }
+  }
+
+  // GPT-OSS can return the OpenAI Responses API shape from the Workers AI binding.
+  // Extract text from output[].content[].text so we don't incorrectly fall back
+  // to the generic "couldn't generate" message after a successful inference.
+  const responseOutput = output.output;
+  if (Array.isArray(responseOutput)) {
+    const text = responseOutput
+      .flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const content = (item as Record<string, unknown>).content;
+        if (!Array.isArray(content)) return [];
+        return content;
+      })
+      .map((item) => {
+        if (!item || typeof item !== "object") return "";
+        const block = item as Record<string, unknown>;
+        return typeof block.text === "string" ? block.text : "";
+      })
+      .filter(Boolean)
+      .join("");
+
+    if (text.trim()) return text;
+  }
+
+  return null;
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -123,17 +188,19 @@ export const Route = createFileRoute("/api/chat")({
             resultType: typeof result,
           });
 
-          const output = result as {
-            response?: string;
-            output_text?: string;
-            result?: { response?: string };
-          };
+          const text = extractAIText(result);
 
-          const text =
-            output.response ??
-            output.output_text ??
-            output.result?.response ??
-            "THRN couldn't generate a response.";
+          if (!text) {
+            console.error("[api/chat] Workers AI returned no text", {
+              model,
+              resultType: typeof result,
+              resultKeys:
+                result && typeof result === "object"
+                  ? Object.keys(result as Record<string, unknown>)
+                  : [],
+            });
+            throw new Error("Workers AI returned a response without text");
+          }
 
           const event = {
             type: "content_block_delta",
