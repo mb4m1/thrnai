@@ -113,6 +113,33 @@ function messageText(message: ChatMessage): string {
     .join("");
 }
 
+function isSimpleGreeting(text: string): boolean {
+  return /^(hi|hello|hey|hiya|howdy|good\s+(morning|afternoon|evening))(?:[!,.\s]*(?:thrn|there))?[!,.\s]*$/i.test(
+    text.trim(),
+  );
+}
+
+function sseTextResponse(text: string): Response {
+  const event = {
+    type: "content_block_delta",
+    delta: {
+      type: "text_delta",
+      text,
+    },
+  };
+
+  return new Response(
+    `data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`,
+    {
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+      },
+    },
+  );
+}
+
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
@@ -139,6 +166,22 @@ export const Route = createFileRoute("/api/chat")({
             (m.role === "user" || m.role === "assistant") &&
             (typeof m.content === "string" || Array.isArray(m.content)),
         );
+
+        // Greetings are deterministic UI interactions, not marketing
+        // consultations. Handle them before the model sees the request so a
+        // simple "hi" cannot trigger the diagnostic-question workflow.
+        const latestUserMessage = [...validMessages]
+          .reverse()
+          .find((message) => message.role === "user");
+        const latestUserText = latestUserMessage
+          ? messageText(latestUserMessage).trim()
+          : "";
+
+        if (isSimpleGreeting(latestUserText)) {
+          return sseTextResponse(
+            "Hi! I'm THRN — your marketing consultant. Tell me what you're working on, and I'll ask the right questions before giving you a strategy.",
+          );
+        }
 
         const promptParts: string[] = [];
         if (body.system?.trim()) {
@@ -178,24 +221,7 @@ export const Route = createFileRoute("/api/chat")({
             throw new Error("Workers AI returned a response without text");
           }
 
-          const event = {
-            type: "content_block_delta",
-            delta: {
-              type: "text_delta",
-              text,
-            },
-          };
-
-          return new Response(
-            `data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`,
-            {
-              status: 200,
-              headers: {
-                "content-type": "text/event-stream",
-                "cache-control": "no-cache, no-transform",
-              },
-            },
-          );
+          return sseTextResponse(text);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
 
