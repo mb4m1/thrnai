@@ -43,6 +43,15 @@ export function patchChatMarkdownRenderer(html: string): string {
   // rendering visible dots, while preserving the actual text.
   text = text.replace(/^[\\-•]\\s+/gm, '');
 
+  // Remove raw Markdown separators that add visual noise to chat responses.
+  text = text.replace(/^---+\\s*$/gm, '');
+
+  // Turn emoji-numbered model headings into clean section headings.
+  text = text.replace(/^([1-9])️⃣\\s+(.+)$/gm, '<h5>$2</h5>');
+
+  // Render single-emphasis Markdown cleanly instead of exposing literal * marks.
+  text = text.replace(/(^|[\\s(])\\*([^*\\n]+)\\*(?=[\\s).,!?:;]|$)/g, '$1<strong>$2</strong>');
+
   // Do not expose model-generated follow-up controls in the chat transcript.
   // The follow-up section is an internal suggestion and should not be shown as
   // a user-facing "Which customer..." prompt.
@@ -50,15 +59,17 @@ export function patchChatMarkdownRenderer(html: string): string {
 
   // Render standard Markdown tables inside a horizontally scrollable wrapper.
   // This keeps wide audit tables usable on phones instead of exposing raw | pipes.
-  text = text.replace(/(?:^|\\n)(\\|[^\\n]+\\|\\n\\|(?:\\s*:?-+:?\\s*\\|)+\\n(?:\\|[^\\n]+\\|\\n?)+)/g, (_, block) => {
-    const rows = block.trim().split(/\\n/).filter(Boolean);
-    if (rows.length < 3) return block;
-    const cells = (row) => row.trim().replace(/^\\|/,'').replace(/\\|$/,'').split('|').map(c => c.trim());
+  text = text.replace(/(?:^|\\n)((?:\\|[^\\n]*\\|?\\n){3,})/g, (match, block) => {
+    const rows = block.trim().split(/\\n/).map(r => r.trim()).filter(Boolean);
+    if (rows.length < 3) return match;
+    const separator = /^\\|?\\s*:?-{3,}:?\\s*(?:\\|\\s*:?-{3,}:?\\s*)+\\|?$/;
+    if (!separator.test(rows[1])) return match;
+    const cells = (row) => row.replace(/^\\|/,'').replace(/\\|$/,'').split('|').map(c => c.trim());
     const headers = cells(rows[0]);
     const bodyRows = rows.slice(2).map(cells);
-    const headHtml = headers.map(c => \`<th style="padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap">\${c}</th>\`).join('');
-    const bodyHtml = bodyRows.map(row => \`<tr>\${row.map(c => \`<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top">\${c}</td>\`).join('')}</tr>\`).join('');
-    return \`<div style="max-width:100%;overflow-x:auto;margin:10px 0;-webkit-overflow-scrolling:touch"><table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>\${headHtml}</tr></thead><tbody>\${bodyHtml}</tbody></table></div>\`;
+    const headHtml = headers.map(c => `<th style="padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,.12);white-space:nowrap">${c}</th>`).join('');
+    const bodyHtml = bodyRows.map(row => `<tr>${row.map(c => `<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top">${c}</td>`).join('')}</tr>`).join('');
+    return `<div style="max-width:100%;overflow-x:auto;margin:10px 0;-webkit-overflow-scrolling:touch"><table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
   });
 
   // Headers
