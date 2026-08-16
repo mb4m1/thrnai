@@ -53,69 +53,47 @@ function serializeError(error: unknown) {
   };
 }
 
-function extractAIText(result: unknown): string | null {
-  if (!result || typeof result !== "object") return null;
+function textFromValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value;
+  if (!value || typeof value !== "object") return null;
 
-  const output = result as Record<string, unknown>;
-
-  if (typeof output.response === "string" && output.response.trim()) {
-    return output.response;
+  if (Array.isArray(value)) {
+    const parts = value.map(textFromValue).filter(Boolean) as string[];
+    return parts.length ? parts.join("") : null;
   }
 
-  if (typeof output.output_text === "string" && output.output_text.trim()) {
-    return output.output_text;
+  const object = value as Record<string, unknown>;
+
+  // Prefer the actual generated-text fields used by Workers AI/OpenAI-shaped results.
+  for (const key of ["response", "output_text", "text", "content"]) {
+    const candidate = textFromValue(object[key]);
+    if (candidate) return candidate;
   }
 
-  const nestedResult = output.result;
-  if (nestedResult && typeof nestedResult === "object") {
-    const nested = nestedResult as Record<string, unknown>;
-    if (typeof nested.response === "string" && nested.response.trim()) {
-      return nested.response;
-    }
-    if (
-      typeof nested.output_text === "string" &&
-      nested.output_text.trim()
-    ) {
-      return nested.output_text;
-    }
-  }
-
-  const choices = output.choices;
+  // Also support OpenAI chat-completions-shaped responses.
+  const choices = object.choices;
   if (Array.isArray(choices)) {
-    const first = choices[0];
-    if (first && typeof first === "object") {
-      const message = (first as Record<string, unknown>).message;
-      if (message && typeof message === "object") {
-        const content = (message as Record<string, unknown>).content;
-        if (typeof content === "string" && content.trim()) return content;
-      }
+    for (const choice of choices) {
+      if (!choice || typeof choice !== "object") continue;
+      const c = choice as Record<string, unknown>;
+      const messageText = textFromValue(c.message);
+      if (messageText) return messageText;
+      const deltaText = textFromValue(c.delta);
+      if (deltaText) return deltaText;
     }
   }
 
-  // GPT-OSS can return the OpenAI Responses API shape from the Workers AI binding.
-  // Extract text from output[].content[].text so we don't incorrectly fall back
-  // to the generic "couldn't generate" message after a successful inference.
-  const responseOutput = output.output;
-  if (Array.isArray(responseOutput)) {
-    const text = responseOutput
-      .flatMap((item) => {
-        if (!item || typeof item !== "object") return [];
-        const content = (item as Record<string, unknown>).content;
-        if (!Array.isArray(content)) return [];
-        return content;
-      })
-      .map((item) => {
-        if (!item || typeof item !== "object") return "";
-        const block = item as Record<string, unknown>;
-        return typeof block.text === "string" ? block.text : "";
-      })
-      .filter(Boolean)
-      .join("");
-
-    if (text.trim()) return text;
+  // GPT-OSS/Responses-style results can nest output under several levels.
+  for (const key of ["output", "result", "results", "data"]) {
+    const candidate = textFromValue(object[key]);
+    if (candidate) return candidate;
   }
 
   return null;
+}
+
+function extractAIText(result: unknown): string | null {
+  return textFromValue(result)?.trim() || null;
 }
 
 export const Route = createFileRoute("/api/chat")({
