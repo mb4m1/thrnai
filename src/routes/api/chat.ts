@@ -12,14 +12,41 @@ type WorkersAI = {
   run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
 };
 
+function cleanAIText(text: string): string {
+  let cleaned = text.trim();
+
+  // GPT-OSS can include its internal channel labels in prompt-mode output.
+  // Never expose the analysis/reasoning section to the user.
+  const finalMarker = /(?:^|\n)\s*(?:assistant\.)?final\s*:?[ \t]*\n?/i;
+  const finalMatch = cleaned.match(finalMarker);
+  if (finalMatch && finalMatch.index !== undefined) {
+    cleaned = cleaned.slice(finalMatch.index + finalMatch[0].length).trim();
+  } else {
+    // If there is no explicit final channel, remove common internal analysis
+    // labels while preserving the actual user-facing text.
+    cleaned = cleaned
+      .replace(/^\s*assistant\.analysis\s*\n?/i, "")
+      .replace(/^\s*assistant\.final\s*\n?/i, "")
+      .trim();
+  }
+
+  return cleaned;
+}
+
 function extractAIText(result: unknown): string | null {
-  if (typeof result === "string" && result.trim()) return result.trim();
+  if (typeof result === "string" && result.trim()) {
+    const text = cleanAIText(result);
+    return text || null;
+  }
   if (!result || typeof result !== "object") return null;
 
   const seen = new Set<object>();
   const walk = (value: unknown, depth = 0): string | null => {
     if (depth > 12 || value == null) return null;
-    if (typeof value === "string") return value.trim() || null;
+    if (typeof value === "string") {
+      const text = cleanAIText(value);
+      return text || null;
+    }
     if (typeof value !== "object") return null;
 
     const objectValue = value as object;
@@ -96,9 +123,6 @@ export const Route = createFileRoute("/api/chat")({
             (typeof m.content === "string" || Array.isArray(m.content)),
         );
 
-        // Use Workers AI prompt mode for GPT-OSS. Cloudflare documents prompt
-        // mode as returning generated text in `response`; this avoids the
-        // Responses-vs-Chat-Completions return-shape mismatch we were seeing.
         const promptParts: string[] = [];
         if (body.system?.trim()) {
           promptParts.push(`SYSTEM:\n${body.system.trim()}`);
@@ -130,19 +154,6 @@ export const Route = createFileRoute("/api/chat")({
           const result = await ai.run(model, {
             prompt,
             max_tokens: maxTokens,
-          });
-
-          console.info("[api/chat] Workers AI RAW RESULT", {
-            model,
-            resultType: typeof result,
-            resultKeys:
-              result && typeof result === "object"
-                ? Object.keys(result as Record<string, unknown>)
-                : [],
-            resultPreview:
-              typeof result === "string"
-                ? result.slice(0, 1000)
-                : JSON.stringify(result).slice(0, 4000),
           });
 
           const text = extractAIText(result);
