@@ -52,81 +52,18 @@ export function patchChatMarkdownRenderer(html: string): string {
   });
   text = text.replace(/^### (.+)$/gm, '<h5>$1</h5>');
   text = text.replace(/^## (.+)$/gm, '<h4>$1</h4>');
-  text = text.replace(/^# (.+)$/gm, '<h3>$1</h3>');`;
+  text = text.replace(/^# (.+)$/gm, '<h3>$1</h3>`;
   return html.includes(needle) ? html.replace(needle, replacement) : html;
 }
 
-/** Inject a minimal account control and client-side auth gate without rewriting the shipped UI. */
+/**
+ * Mark the page as the Cloudflare/Workers-backed THRN runtime.
+ * The shipped HTML already contains the sign-in button, auth gate, and
+ * /auth/me integration; it intentionally stays disabled on static previews.
+ * This small bootstrap flag activates that existing UI on the deployed Worker.
+ */
 export function patchAuth(html: string): string {
-  const script = `<script nonce="${NONCE_PLACEHOLDER}">
-(() => {
-  const loginUrl = '/auth/google';
-  const logoutUrl = '/auth/logout';
-  let authUser = null;
-
-  function addAuthStyles() {
-    if (document.getElementById('thrn-auth-style')) return;
-    const style = document.createElement('style');
-    style.id = 'thrn-auth-style';
-    style.textContent = '.thrn-auth{display:inline-flex;align-items:center;gap:8px;margin-left:8px}.thrn-auth-btn{border:1px solid rgba(255,255,255,.12);background:#181B22;color:#F0EDE8;border-radius:7px;padding:7px 12px;font:500 13px DM Sans,system-ui,sans-serif;text-decoration:none;cursor:pointer}.thrn-auth-btn:hover{background:#1E2230}.thrn-auth-user{display:inline-flex;align-items:center;gap:7px;color:#8B8FA8;font:400 13px DM Sans,system-ui,sans-serif}.thrn-auth-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid rgba(124,158,122,.3)}.thrn-auth-logout{color:#8B8FA8;text-decoration:none;font-size:12px}.thrn-auth-logout:hover{color:#F0EDE8}@media(max-width:700px){.thrn-auth-user span{display:none}.thrn-auth-btn{padding:7px 10px}}
-';
-    document.head.appendChild(style);
-  }
-
-  function renderAuth() {
-    const nav = document.querySelector('.nav-links');
-    if (!nav) return;
-    addAuthStyles();
-    let wrap = document.getElementById('thrn-auth-control');
-    if (!wrap) {
-      wrap = document.createElement('li');
-      wrap.id = 'thrn-auth-control';
-      wrap.className = 'thrn-auth';
-      nav.appendChild(wrap);
-    }
-    if (!authUser) {
-      wrap.innerHTML = '<a class="thrn-auth-btn" href="/auth/google">Sign in with Google</a>';
-    } else {
-      const picture = authUser.picture ? '<img class="thrn-auth-avatar" src="' + String(authUser.picture).replace(/"/g, '') + '" alt="">' : '';
-      wrap.innerHTML = '<span class="thrn-auth-user">' + picture + '<span>' + String(authUser.name || authUser.email).replace(/[<>]/g, '') + '</span></span><a class="thrn-auth-logout" href="' + logoutUrl + '">Log out</a>';
-    }
-  }
-
-  async function loadAuth() {
-    try {
-      const response = await fetch('/auth/me', { credentials: 'same-origin', cache: 'no-store' });
-      const data = await response.json();
-      authUser = data.authenticated ? data.user : null;
-    } catch { authUser = null; }
-    renderAuth();
-  }
-
-  const originalFetch = window.fetch.bind(window);
-  window.fetch = async (...args) => {
-    const request = args[0];
-    const inputUrl = typeof request === 'string' ? request : request && 'url' in request ? request.url : '';
-    if (inputUrl && new URL(inputUrl, location.origin).pathname === '/api/chat') {
-      if (!authUser) {
-        await loadAuth();
-      }
-      if (!authUser) {
-        location.href = loginUrl;
-        return new Response('', { status: 204 });
-      }
-    }
-    const response = await originalFetch(...args);
-    if (inputUrl && new URL(inputUrl, location.origin).pathname === '/api/chat' && response.status === 401) {
-      authUser = null;
-      renderAuth();
-      location.href = loginUrl;
-    }
-    return response;
-  };
-
-  document.addEventListener('DOMContentLoaded', loadAuth);
-  if (document.readyState !== 'loading') loadAuth();
-})();
-</script>`;
+  const script = `<script nonce="${NONCE_PLACEHOLDER}">window.__THRN_PROXY__ = true;</script>`;
   return html.includes('</body>') ? html.replace('</body>', `${script}</body>`) : `${html}${script}`;
 }
 
