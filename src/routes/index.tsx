@@ -11,7 +11,6 @@ export function createNonce(): string {
   return btoa(binary);
 }
 
-/** Strict CSP: inline scripts only run when they carry the per-request nonce. */
 export function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
@@ -27,44 +26,18 @@ export function buildCsp(nonce: string): string {
   ].join("; ");
 }
 
-/**
- * The shipped THRN page has its renderer embedded in a single HTML document.
- * Keep the source page unchanged and apply this small compatibility patch at
- * the response boundary so Markdown output stays clean and readable on phones.
- */
 export function patchChatMarkdownRenderer(html: string): string {
   const needle = "  // Headers\n  text = text.replace(/^## (.+)$/gm, '<h4>$1</h4>');";
   const replacement = `  // Mobile/Markdown compatibility: model output may contain escaped <br> tags.
-  // Only allow the exact tag form (no attributes) so HTML safety is preserved.
   text = text.replace(/&lt;br\\s*\\/?&gt;/gi, '<br>');
-
-  // Keep chat output clean: remove Markdown bullet markers instead of
-  // rendering visible dots, while preserving the actual text.
   text = text.replace(/^[\\-•]\\s+/gm, '');
-
-  // Remove raw Markdown separators that add visual noise to chat responses.
   text = text.replace(/^---+\\s*$/gm, '');
-
-  // Turn emoji-numbered model headings into clean section headings.
   text = text.replace(/^([1-9])️⃣\\s+(.+)$/gm, '<h5>$2</h5>');
-
-  // Render single-emphasis Markdown cleanly instead of exposing literal * marks.
   text = text.replace(/(^|[\\s(])\\*([^*\\n]+)\\*(?=[\\s).,!?:;]|$)/g, '$1<strong>$2</strong>');
-
-  // Keep generated paragraphs and list content inside the mobile card width.
-  // This prevents long examples such as "(e.g., traffic...)" from being
-  // clipped off-screen as seen in the plan-mode diagnostic list.
   text = text.replace(/<p([^>]*)>/gi, '<p$1 style="white-space:normal;overflow-wrap:anywhere;word-break:break-word;max-width:100%;">');
   text = text.replace(/<li([^>]*)>/gi, '<li$1 style="white-space:normal;overflow-wrap:anywhere;word-break:break-word;max-width:100%;">');
   text = text.replace(/<div([^>]*)>/gi, '<div$1 style="max-width:100%;overflow-wrap:anywhere;word-break:break-word;">');
-
-  // Do not expose model-generated follow-up controls in the chat transcript.
-  // The follow-up section is an internal suggestion and should not be shown as
-  // a user-facing "Which customer..." prompt.
   text = text.replace(/\\n?Follow-ups?:[\\s\\S]*$/i, '');
-
-  // Render standard Markdown tables inside a horizontally scrollable wrapper.
-  // This keeps wide audit tables usable on phones instead of exposing raw | pipes.
   text = text.replace(/(?:^|\\n)((?:\\|[^\\n]*\\|?\\n){3,})/g, (match, block) => {
     const rows = block.trim().split(/\\n/).map(r => r.trim()).filter(Boolean);
     if (rows.length < 3) return match;
@@ -77,18 +50,89 @@ export function patchChatMarkdownRenderer(html: string): string {
     const bodyHtml = bodyRows.map(row => '<tr>' + row.map(c => '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top">' + c + '</td>').join('') + '</tr>').join('');
     return '<div style="max-width:100%;overflow-x:auto;margin:10px 0;-webkit-overflow-scrolling:touch"><table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:.92em"><thead><tr>' + headHtml + '</tr></thead><tbody>' + bodyHtml + '</tbody></table></div>';
   });
-
-  // Headers
   text = text.replace(/^### (.+)$/gm, '<h5>$1</h5>');
   text = text.replace(/^## (.+)$/gm, '<h4>$1</h4>');
   text = text.replace(/^# (.+)$/gm, '<h3>$1</h3>');`;
-
   return html.includes(needle) ? html.replace(needle, replacement) : html;
+}
+
+/** Inject a minimal account control and client-side auth gate without rewriting the shipped UI. */
+export function patchAuth(html: string): string {
+  const script = `<script nonce="${NONCE_PLACEHOLDER}">
+(() => {
+  const loginUrl = '/auth/google';
+  const logoutUrl = '/auth/logout';
+  let authUser = null;
+
+  function addAuthStyles() {
+    if (document.getElementById('thrn-auth-style')) return;
+    const style = document.createElement('style');
+    style.id = 'thrn-auth-style';
+    style.textContent = '.thrn-auth{display:inline-flex;align-items:center;gap:8px;margin-left:8px}.thrn-auth-btn{border:1px solid rgba(255,255,255,.12);background:#181B22;color:#F0EDE8;border-radius:7px;padding:7px 12px;font:500 13px DM Sans,system-ui,sans-serif;text-decoration:none;cursor:pointer}.thrn-auth-btn:hover{background:#1E2230}.thrn-auth-user{display:inline-flex;align-items:center;gap:7px;color:#8B8FA8;font:400 13px DM Sans,system-ui,sans-serif}.thrn-auth-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid rgba(124,158,122,.3)}.thrn-auth-logout{color:#8B8FA8;text-decoration:none;font-size:12px}.thrn-auth-logout:hover{color:#F0EDE8}@media(max-width:700px){.thrn-auth-user span{display:none}.thrn-auth-btn{padding:7px 10px}}
+';
+    document.head.appendChild(style);
+  }
+
+  function renderAuth() {
+    const nav = document.querySelector('.nav-links');
+    if (!nav) return;
+    addAuthStyles();
+    let wrap = document.getElementById('thrn-auth-control');
+    if (!wrap) {
+      wrap = document.createElement('li');
+      wrap.id = 'thrn-auth-control';
+      wrap.className = 'thrn-auth';
+      nav.appendChild(wrap);
+    }
+    if (!authUser) {
+      wrap.innerHTML = '<a class="thrn-auth-btn" href="/auth/google">Sign in with Google</a>';
+    } else {
+      const picture = authUser.picture ? '<img class="thrn-auth-avatar" src="' + String(authUser.picture).replace(/"/g, '') + '" alt="">' : '';
+      wrap.innerHTML = '<span class="thrn-auth-user">' + picture + '<span>' + String(authUser.name || authUser.email).replace(/[<>]/g, '') + '</span></span><a class="thrn-auth-logout" href="' + logoutUrl + '">Log out</a>';
+    }
+  }
+
+  async function loadAuth() {
+    try {
+      const response = await fetch('/auth/me', { credentials: 'same-origin', cache: 'no-store' });
+      const data = await response.json();
+      authUser = data.authenticated ? data.user : null;
+    } catch { authUser = null; }
+    renderAuth();
+  }
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const request = args[0];
+    const inputUrl = typeof request === 'string' ? request : request && 'url' in request ? request.url : '';
+    if (inputUrl && new URL(inputUrl, location.origin).pathname === '/api/chat') {
+      if (!authUser) {
+        await loadAuth();
+      }
+      if (!authUser) {
+        location.href = loginUrl;
+        return new Response('', { status: 204 });
+      }
+    }
+    const response = await originalFetch(...args);
+    if (inputUrl && new URL(inputUrl, location.origin).pathname === '/api/chat' && response.status === 401) {
+      authUser = null;
+      renderAuth();
+      location.href = loginUrl;
+    }
+    return response;
+  };
+
+  document.addEventListener('DOMContentLoaded', loadAuth);
+  if (document.readyState !== 'loading') loadAuth();
+})();
+</script>`;
+  return html.includes('</body>') ? html.replace('</body>', `${script}</body>`) : `${html}${script}`;
 }
 
 export function renderThrnDocument(nonce: string): string {
   const patched = patchChatMarkdownRenderer(thrnHtml);
-  return patched.replaceAll(NONCE_PLACEHOLDER, nonce);
+  return patchAuth(patched).replaceAll(NONCE_PLACEHOLDER, nonce);
 }
 
 export const Route = createFileRoute("/")({
