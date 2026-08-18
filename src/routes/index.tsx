@@ -57,13 +57,75 @@ export function patchChatMarkdownRenderer(html: string): string {
 }
 
 /**
- * Mark the page as the Cloudflare/Workers-backed THRN runtime.
- * The shipped HTML already contains the sign-in button, auth gate, and
- * /auth/me integration; it intentionally stays disabled on static previews.
- * This small bootstrap flag activates that existing UI on the deployed Worker.
+ * Activate the deployed Worker authentication UI.
+ *
+ * The marketing page is intentionally served as static HTML. Authentication
+ * is therefore mounted here at the Worker boundary rather than by the React
+ * login route. The API already rejects unauthenticated chat requests; this
+ * bootstrap makes that requirement visible and sends users through the real
+ * Google OAuth endpoint instead of leaving them with a hidden/non-functional
+ * sign-in control.
  */
 export function patchAuth(html: string): string {
-  const script = `<script nonce="${NONCE_PLACEHOLDER}">window.__THRN_PROXY__ = true;</script>`;
+  const script = `<script nonce="${NONCE_PLACEHOLDER}">
+(() => {
+  const boot = () => {
+    if (window.__THRN_AUTH_BOOTED__) return;
+    window.__THRN_AUTH_BOOTED__ = true;
+
+    const style = document.createElement('style');
+    style.textContent = '.thrn-auth-cta{position:fixed;top:12px;right:40px;z-index:9999;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border:1px solid rgba(124,158,122,.38);border-radius:8px;background:rgba(17,19,24,.92);color:#dfe8dd;font:500 13px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-decoration:none;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(14px);transition:background .15s,border-color .15s,transform .12s}.thrn-auth-cta:hover{background:rgba(124,158,122,.14);border-color:rgba(124,158,122,.65);transform:translateY(-1px)}.thrn-auth-dot{width:6px;height:6px;border-radius:50%;background:#7c9e7a;box-shadow:0 0 0 3px rgba(124,158,122,.12)}.thrn-auth-status{color:#a8c4a6}@media(max-width:700px){.thrn-auth-cta{top:10px;right:14px;padding:8px 11px;font-size:12px}.thrn-auth-cta .thrn-auth-label{display:none}}';
+    document.head.appendChild(style);
+
+    const cta = document.createElement('a');
+    cta.className = 'thrn-auth-cta';
+    cta.href = '/auth/google';
+    cta.innerHTML = '<span class="thrn-auth-dot" aria-hidden="true"></span><span class="thrn-auth-label">Sign in with Google</span>';
+    cta.setAttribute('aria-label', 'Sign in with Google');
+    document.body.appendChild(cta);
+
+    const replaceAuthCopy = () => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      let node;
+      while ((node = walker.nextNode())) nodes.push(node);
+      for (const textNode of nodes) {
+        const value = textNode.nodeValue || '';
+        if (/NO ACCOUNT NEEDED/i.test(value)) {
+          textNode.nodeValue = value.replace(/NO ACCOUNT NEEDED/gi, 'SIGN IN REQUIRED');
+        }
+      }
+    };
+    replaceAuthCopy();
+
+    fetch('/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (data && data.authenticated) {
+          cta.href = '/auth/logout';
+          cta.setAttribute('aria-label', 'Sign out');
+          cta.innerHTML = '<span class="thrn-auth-dot" aria-hidden="true"></span><span class="thrn-auth-label">' + (data.user?.name ? String(data.user.name).replace(/[<>]/g, '') : 'Signed in') + '</span>';
+          cta.title = 'Sign out';
+        }
+      })
+      .catch(() => {});
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      const input = args[0];
+      const requestUrl = typeof input === 'string' ? input : (input && 'url' in input ? input.url : '');
+      if (response.status === 401 && String(requestUrl).includes('/api/chat')) {
+        window.location.assign('/auth/google');
+      }
+      return response;
+    };
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
+})();
+</script>`;
   return html.includes('</body>') ? html.replace('</body>', `${script}</body>`) : `${html}${script}`;
 }
 
