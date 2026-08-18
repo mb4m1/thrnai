@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
+import { getCookie, verifySessionCookie } from "../../lib/auth";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -14,11 +15,6 @@ type WorkersAI = {
 
 function cleanAIText(text: string): string {
   let cleaned = text.trim();
-
-  // GPT-OSS can expose its internal channel labels in several forms:
-  // assistant.analysis, assistantanalysis, assistant.final, assistantfinal,
-  // and can sometimes append another analysis segment after the final text.
-  // Keep ONLY the final channel and stop before any later analysis channel.
   const finalMarker = /assistant(?:[.\s:_-]*)final\s*:?[ \t]*/gi;
   const analysisMarker = /assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/gi;
   const finalMatches = [...cleaned.matchAll(finalMarker)];
@@ -27,45 +23,32 @@ function cleanAIText(text: string): string {
     const finalMatch = finalMatches[finalMatches.length - 1];
     const start = (finalMatch.index ?? 0) + finalMatch[0].length;
     cleaned = cleaned.slice(start).trim();
-
     const trailingAnalysis = analysisMarker.exec(cleaned);
     if (trailingAnalysis?.index !== undefined) {
       cleaned = cleaned.slice(0, trailingAnalysis.index).trim();
     }
   } else {
-    // No final marker: remove any exposed analysis marker and everything after
-    // it when it appears before the actual answer.
     const leadingAnalysis = cleaned.match(analysisMarker);
     if (leadingAnalysis?.index !== undefined) {
       cleaned = cleaned.slice(leadingAnalysis.index + leadingAnalysis[0].length).trim();
     }
   }
 
-  // Remove any remaining channel labels that may be left at boundaries.
-  cleaned = cleaned
+  return cleaned
     .replace(/^\s*assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/i, "")
     .replace(/^\s*assistant(?:[.\s:_-]*)final\s*:?[ \t]*/i, "")
     .trim();
-
-  return cleaned;
 }
 
 function extractAIText(result: unknown): string | null {
-  if (typeof result === "string" && result.trim()) {
-    const text = cleanAIText(result);
-    return text || null;
-  }
+  if (typeof result === "string" && result.trim()) return cleanAIText(result) || null;
   if (!result || typeof result !== "object") return null;
 
   const seen = new Set<object>();
   const walk = (value: unknown, depth = 0): string | null => {
     if (depth > 12 || value == null) return null;
-    if (typeof value === "string") {
-      const text = cleanAIText(value);
-      return text || null;
-    }
+    if (typeof value === "string") return cleanAIText(value) || null;
     if (typeof value !== "object") return null;
-
     const objectValue = value as object;
     if (seen.has(objectValue)) return null;
     seen.add(objectValue);
@@ -79,114 +62,63 @@ function extractAIText(result: unknown): string | null {
     }
 
     const object = value as Record<string, unknown>;
-
-    for (const key of [
-      "response",
-      "output_text",
-      "text",
-      "generated_text",
-      "content",
-      "message",
-      "delta",
-    ]) {
+    for (const key of ["response", "output_text", "text", "generated_text", "content", "message", "delta", "output", "choices", "result", "data"]) {
       const text = walk(object[key], depth + 1);
       if (text) return text;
     }
-
-    for (const key of ["output", "choices", "result", "data"]) {
-      const text = walk(object[key], depth + 1);
-      if (text) return text;
-    }
-
     return null;
   };
-
   return walk(result);
 }
 
 function messageText(message: ChatMessage): string {
   if (typeof message.content === "string") return message.content;
-  return message.content
-    .map((block) =>
-      typeof block?.text === "string" ? block.text : "",
-    )
-    .join("");
+  return message.content.map((block) => typeof block?.text === "string" ? block.text : "").join("");
 }
 
 function isSimpleGreeting(text: string): boolean {
-  return /^(hi|hello|hey|hiya|howdy|good\s+(morning|afternoon|evening))(?:[!,.\s]*(?:thrn|there))?[!,.\s]*$/i.test(
-    text.trim(),
-  );
+  return /^(hi|hello|hey|hiya|howdy|good\s+(morning|afternoon|evening))(?:[!,.\s]*(?:thrn|there))?[!,.\s]*$/i.test(text.trim());
 }
 
 function sseTextResponse(text: string): Response {
-  const event = {
-    type: "content_block_delta",
-    delta: {
-      type: "text_delta",
-      text,
-    },
-  };
-
-  return new Response(
-    `data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`,
-    {
-      status: 200,
-      headers: {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache, no-transform",
-      },
-    },
-  );
+  const event = { type: "content_block_delta", delta: { type: "text_delta", text } };
+  return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, {
+    status: 200,
+    headers: { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform" },
+  });
 }
 
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        let body: {
-          system?: string;
-          messages?: ChatMessage[];
-          max_tokens?: number;
-        };
+        const authSecret = (env as Record<string, string | undefined>).AUTH_SECRET;
+        const user = await verifySessionCookie(getCookie(request, "thrn_session"), authSecret || "");
+        if (!user) {
+          return new Response(JSON.stringify({ error: { code: "auth_required", message: "Please sign in to use THRN chat." } }), {
+            status: 401,
+            headers: { ...jsonHeaders, "cache-control": "no-store" },
+          });
+        }
 
+        let body: { system?: string; messages?: ChatMessage[]; max_tokens?: number };
         try {
           body = await request.json();
         } catch {
-          return new Response(
-            JSON.stringify({ error: { message: "Invalid JSON body" } }),
-            { status: 400, headers: jsonHeaders },
-          );
+          return new Response(JSON.stringify({ error: { message: "Invalid JSON body" } }), { status: 400, headers: jsonHeaders });
         }
 
         const messages = Array.isArray(body.messages) ? body.messages : [];
-        const validMessages = messages.filter(
-          (m) =>
-            m &&
-            (m.role === "user" || m.role === "assistant") &&
-            (typeof m.content === "string" || Array.isArray(m.content)),
-        );
-
-        // Greetings are deterministic UI interactions, not marketing
-        // consultations. Handle them before the model sees the request so a
-        // simple "hi" cannot trigger the diagnostic-question workflow.
-        const latestUserMessage = [...validMessages]
-          .reverse()
-          .find((message) => message.role === "user");
-        const latestUserText = latestUserMessage
-          ? messageText(latestUserMessage).trim()
-          : "";
+        const validMessages = messages.filter((m) => m && (m.role === "user" || m.role === "assistant") && (typeof m.content === "string" || Array.isArray(m.content)));
+        const latestUserMessage = [...validMessages].reverse().find((message) => message.role === "user");
+        const latestUserText = latestUserMessage ? messageText(latestUserMessage).trim() : "";
 
         if (isSimpleGreeting(latestUserText)) {
-          return sseTextResponse(
-            "Hi! I'm THRN — your marketing consultant. Tell me what you're working on, and I'll ask the right questions before giving you a strategy.",
-          );
+          return sseTextResponse("Hi! I'm THRN — your marketing consultant. Tell me what you're working on, and I'll ask the right questions before giving you a strategy.");
         }
 
         const promptParts: string[] = [];
-        if (body.system?.trim()) {
-          promptParts.push(`SYSTEM:\n${body.system.trim()}`);
-        }
+        if (body.system?.trim()) promptParts.push(`SYSTEM:\n${body.system.trim()}`);
         for (const message of validMessages) {
           const content = messageText(message).trim();
           if (!content) continue;
@@ -197,48 +129,18 @@ export const Route = createFileRoute("/api/chat")({
 
         try {
           const ai = env.AI as WorkersAI | undefined;
-          if (!ai) {
-            throw new Error("Workers AI binding AI is unavailable at runtime");
-          }
-
+          if (!ai) throw new Error("Workers AI binding AI is unavailable at runtime");
           const model = "@cf/openai/gpt-oss-20b";
           const maxTokens = Math.min(body.max_tokens ?? 1000, 2000);
-
-          console.info("[api/chat] Calling Workers AI", {
-            model,
-            messageCount: validMessages.length,
-            maxTokens,
-            inputMode: "prompt",
-          });
-
-          const result = await ai.run(model, {
-            prompt,
-            max_tokens: maxTokens,
-          });
-
+          console.info("[api/chat] Calling Workers AI", { model, user: user.sub, messageCount: validMessages.length, maxTokens, inputMode: "prompt" });
+          const result = await ai.run(model, { prompt, max_tokens: maxTokens });
           const text = extractAIText(result);
-          if (!text) {
-            throw new Error("Workers AI returned a response without text");
-          }
-
+          if (!text) throw new Error("Workers AI returned a response without text");
           return sseTextResponse(text);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-
-          console.error("[api/chat] Workers AI FAILED", {
-            model: "@cf/openai/gpt-oss-20b",
-            error: message,
-          });
-
-          return new Response(
-            JSON.stringify({
-              error: {
-                code: "ai_error",
-                message: `THRN couldn't reach the AI engine: ${message}`,
-              },
-            }),
-            { status: 503, headers: jsonHeaders },
-          );
+          console.error("[api/chat] Workers AI FAILED", { model: "@cf/openai/gpt-oss-20b", error: message, user: user.sub });
+          return new Response(JSON.stringify({ error: { code: "ai_error", message: `THRN couldn't reach the AI engine: ${message}` } }), { status: 503, headers: jsonHeaders });
         }
       },
     },
