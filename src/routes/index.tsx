@@ -52,7 +52,7 @@ export function patchChatMarkdownRenderer(html: string): string {
   });
   text = text.replace(/^### (.+)$/gm, '<h5>$1</h5>');
   text = text.replace(/^## (.+)$/gm, '<h4>$1</h4>');
-  text = text.replace(/^# (.+)$/gm, '<h3>$1</h3>`;
+  text = text.replace(/^# (.+)$/gm, '<h3>$1</h3>');`;
   return html.includes(needle) ? html.replace(needle, replacement) : html;
 }
 
