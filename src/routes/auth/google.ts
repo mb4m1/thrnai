@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getCookie, randomState, serializeCookie } from "../../lib/auth";
+import { randomState, serializeCookie } from "../../lib/auth";
 import { env } from "cloudflare:workers";
 
 export const Route = createFileRoute("/auth/google")({
@@ -7,9 +7,7 @@ export const Route = createFileRoute("/auth/google")({
     handlers: {
       GET: ({ request }) => {
         const clientId = (env as Record<string, string | undefined>).GOOGLE_CLIENT_ID;
-        if (!clientId) {
-          return new Response("Google OAuth is not configured yet.", { status: 503 });
-        }
+        if (!clientId) return new Response("Google OAuth is not configured yet.", { status: 503 });
 
         const url = new URL(request.url);
         const state = randomState();
@@ -22,19 +20,9 @@ export const Route = createFileRoute("/auth/google")({
         authUrl.searchParams.set("state", state);
         authUrl.searchParams.set("prompt", "select_account");
 
-        const existing = getCookie(request, "thrn_return");
-        const returnPath = existing && existing.startsWith("/") ? existing : "/";
-
-        return new Response(null, {
-          status: 302,
-          headers: {
-            Location: authUrl.toString(),
-            "Set-Cookie": [
-              serializeCookie("thrn_oauth_state", state, { maxAge: 600 }),
-              serializeCookie("thrn_return", returnPath, { maxAge: 600, httpOnly: false }),
-            ].join(", "),
-          },
-        });
+        const headers = new Headers({ Location: authUrl.toString() });
+        headers.append("Set-Cookie", serializeCookie("thrn_oauth_state", state, { maxAge: 600 }));
+        return new Response(null, { status: 302, headers });
       },
     },
   },
