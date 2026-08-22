@@ -15,29 +15,30 @@ type WorkersAI = {
 
 function cleanAIText(text: string): string {
   let cleaned = text.trim();
-  const finalMarker = /assistant(?:[.\s:_-]*)final\s*:?[ \t]*/gi;
-  const analysisMarker = /assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/gi;
+
+  // Some models can expose internal role/analysis markers in raw text output.
+  // Strip those before anything reaches the user-facing chat UI.
+  cleaned = cleaned
+    .replace(/<\/?(?:think|analysis|reasoning)>/gi, "")
+    .replace(/^\s*(?:assistant|assistant final|final)\s*[:\-]?\s*/i, "")
+    .replace(/^\s*(?:analysis|reasoning)\s*[:\-]?\s*/i, "");
+
+  const finalMarker = /(?:^|\n)\s*assistant(?:[.\s:_-]*)final\s*:?[ \t]*/gi;
+  const analysisMarker = /(?:^|\n)\s*assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/gi;
   const finalMatches = [...cleaned.matchAll(finalMarker)];
 
   if (finalMatches.length > 0) {
     const finalMatch = finalMatches[finalMatches.length - 1];
     const start = (finalMatch.index ?? 0) + finalMatch[0].length;
     cleaned = cleaned.slice(start).trim();
-    const trailingAnalysis = analysisMarker.exec(cleaned);
-    if (trailingAnalysis?.index !== undefined) {
-      cleaned = cleaned.slice(0, trailingAnalysis.index).trim();
-    }
-  } else {
-    const leadingAnalysis = cleaned.match(analysisMarker);
-    if (leadingAnalysis?.index !== undefined) {
-      cleaned = cleaned.slice(leadingAnalysis.index + leadingAnalysis[0].length).trim();
-    }
   }
 
-  return cleaned
-    .replace(/^\s*assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/i, "")
-    .replace(/^\s*assistant(?:[.\s:_-]*)final\s*:?[ \t]*/i, "")
-    .trim();
+  const trailingAnalysis = analysisMarker.exec(cleaned);
+  if (trailingAnalysis?.index !== undefined) {
+    cleaned = cleaned.slice(0, trailingAnalysis.index).trim();
+  }
+
+  return cleaned.trim();
 }
 
 function extractAIText(result: unknown): string | null {
@@ -117,30 +118,42 @@ export const Route = createFileRoute("/api/chat")({
           return sseTextResponse("Hi! I'm THRN — your marketing consultant. Tell me what you're working on, and I'll ask the right questions before giving you a strategy.");
         }
 
-        const promptParts: string[] = [];
-        if (body.system?.trim()) promptParts.push(`SYSTEM:\n${body.system.trim()}`);
-        for (const message of validMessages) {
-          const content = messageText(message).trim();
-          if (!content) continue;
-          promptParts.push(`${message.role.toUpperCase()}:\n${content}`);
-        }
-        promptParts.push("ASSISTANT:");
-        const prompt = promptParts.join("\n\n");
-
         try {
           const ai = env.AI as WorkersAI | undefined;
           if (!ai) throw new Error("Workers AI binding AI is unavailable at runtime");
           const model = "@cf/openai/gpt-oss-20b";
           const maxTokens = Math.min(body.max_tokens ?? 1000, 2000);
-          console.info("[api/chat] Calling Workers AI", { model, user: user.sub, messageCount: validMessages.length, maxTokens, inputMode: "prompt" });
-          const result = await ai.run(model, { prompt, max_tokens: maxTokens });
+
+          const aiMessages: Array<Record<string, unknown>> = [];
+          if (body.system?.trim()) {
+            aiMessages.push({ role: "system", content: body.system.trim() });
+          }
+          for (const message of validMessages) {
+            const content = messageText(message).trim();
+            if (content) aiMessages.push({ role: message.role, content });
+          }
+
+          console.info("[api/chat] Calling Workers AI", {
+            model,
+            user: user.sub,
+            messageCount: validMessages.length,
+            maxTokens,
+            inputMode: "messages",
+          });
+
+          const result = await ai.run(model, {
+            messages: aiMessages,
+            max_tokens: maxTokens,
+            temperature: 0.4,
+          });
+
           const text = extractAIText(result);
           if (!text) throw new Error("Workers AI returned a response without text");
           return sseTextResponse(text);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.error("[api/chat] Workers AI FAILED", { model: "@cf/openai/gpt-oss-20b", error: message, user: user.sub });
-          return new Response(JSON.stringify({ error: { code: "ai_error", message: `THRN couldn't reach the AI engine: ${message}` } }), { status: 503, headers: jsonHeaders });
+          return new Response(JSON.stringify({ error: { code: "ai_error", message: "THRN couldn't reach the AI engine. Please try again." } }), { status: 503, headers: jsonHeaders });
         }
       },
     },
