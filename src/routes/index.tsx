@@ -74,7 +74,7 @@ export function patchAuth(html: string): string {
     window.__THRN_AUTH_BOOTED__ = true;
 
     const style = document.createElement('style');
-    style.textContent = '.thrn-auth-wrap{position:fixed;top:12px;right:40px;z-index:9999;font:500 13px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.thrn-auth-profile{width:38px;height:38px;padding:0;border:1px solid rgba(124,158,122,.38);border-radius:50%;display:grid;place-items:center;background:rgba(17,19,24,.92);color:#dfe8dd;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(14px);transition:background .15s,border-color .15s,transform .12s}.thrn-auth-profile:hover{background:rgba(124,158,122,.14);border-color:rgba(124,158,122,.65);transform:translateY(-1px)}.thrn-auth-profile svg{width:19px;height:19px}.thrn-auth-menu{position:absolute;top:46px;right:0;width:220px;padding:10px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(17,19,24,.97);box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(18px);display:none}.thrn-auth-menu.open{display:block}.thrn-auth-title{padding:8px 10px 4px;color:#e4e9e2;font-size:14px}.thrn-auth-copy{padding:2px 10px 10px;color:#9ca39d;font-size:12px;line-height:1.45}.thrn-auth-signin,.thrn-auth-signout{width:100%;border:0;border-radius:8px;padding:10px 12px;background:#7c9e7a;color:#111510;font:600 13px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}.thrn-auth-signin:hover,.thrn-auth-signout:hover{filter:brightness(1.06)}.thrn-auth-user{padding:8px 10px 10px;color:#a8c4a6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:700px){.thrn-auth-wrap{top:10px;right:14px}.thrn-auth-profile{width:36px;height:36px}.thrn-auth-menu{right:0;width:210px}}';
+    style.textContent = '.thrn-auth-wrap{position:fixed;top:12px;right:40px;z-index:9999;font:500 13px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.thrn-auth-profile{width:38px;height:38px;padding:0;border:1px solid rgba(124,158,122,.38);border-radius:50%;display:grid;place-items:center;background:rgba(17,19,24,.92);color:#dfe8dd;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(14px);transition:background .15s,border-color .15s,transform .12s}.thrn-auth-profile:hover{background:rgba(124,158,122,.14);border-color:rgba(124,158,122,.65);transform:translateY(-1px)}.thrn-auth-profile svg{width:19px;height:19px}.thrn-auth-menu{position:absolute;top:46px;right:0;width:240px;padding:10px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(17,19,24,.97);box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(18px);display:none}.thrn-auth-menu.open{display:block}.thrn-auth-title{padding:8px 10px 4px;color:#e4e9e2;font-size:14px}.thrn-auth-copy{padding:2px 10px 10px;color:#9ca39d;font-size:12px;line-height:1.45}.thrn-auth-signin,.thrn-auth-email,.thrn-auth-signout{width:100%;border-radius:8px;padding:10px 12px;font:600 13px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}.thrn-auth-signin{border:0;background:#7c9e7a;color:#111510}.thrn-auth-email{margin-top:7px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#dfe8dd}.thrn-auth-signin:hover,.thrn-auth-email:hover,.thrn-auth-signout:hover{filter:brightness(1.06)}.thrn-auth-user{padding:8px 10px 10px;color:#a8c4a6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.thrn-auth-signout{border:0;background:#7c9e7a;color:#111510}@media(max-width:700px){.thrn-auth-wrap{top:10px;right:14px}.thrn-auth-profile{width:36px;height:36px}.thrn-auth-menu{right:0;width:220px}}';
     document.head.appendChild(style);
 
     const wrap = document.createElement('div');
@@ -89,7 +89,7 @@ export function patchAuth(html: string): string {
 
     const menu = document.createElement('div');
     menu.className = 'thrn-auth-menu';
-    menu.innerHTML = '<div class="thrn-auth-title">Welcome to THRN</div><div class="thrn-auth-copy">Sign in to sync your chats and get the full THRN experience.</div><button type="button" class="thrn-auth-signin">Sign in</button>';
+    menu.innerHTML = '<div class="thrn-auth-title">Welcome to THRN</div><div class="thrn-auth-copy">Sign in to sync your chats and get the full THRN experience.</div><button type="button" class="thrn-auth-signin">Sign in with Google</button><button type="button" class="thrn-auth-email">Sign in with email</button>';
 
     const closeMenu = () => {
       menu.classList.remove('open');
@@ -108,8 +108,11 @@ export function patchAuth(html: string): string {
       if (event.key === 'Escape') closeMenu();
     });
 
-    const signin = menu.querySelector('.thrn-auth-signin');
-    signin.addEventListener('click', () => { window.location.assign('/auth/google'); });
+    const googleSignin = menu.querySelector('.thrn-auth-signin');
+    googleSignin.addEventListener('click', () => { window.location.assign('/auth/google'); });
+
+    const emailSignin = menu.querySelector('.thrn-auth-email');
+    emailSignin.addEventListener('click', () => { window.location.assign('/login?next=' + encodeURIComponent(window.location.pathname + window.location.search)); });
 
     wrap.appendChild(profile);
     wrap.appendChild(menu);
