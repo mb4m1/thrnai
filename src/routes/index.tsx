@@ -74,15 +74,46 @@ export function patchAuth(html: string): string {
     window.__THRN_AUTH_BOOTED__ = true;
 
     const style = document.createElement('style');
-    style.textContent = '.thrn-auth-cta{position:fixed;top:12px;right:40px;z-index:9999;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border:1px solid rgba(124,158,122,.38);border-radius:8px;background:rgba(17,19,24,.92);color:#dfe8dd;font:500 13px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-decoration:none;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(14px);transition:background .15s,border-color .15s,transform .12s}.thrn-auth-cta:hover{background:rgba(124,158,122,.14);border-color:rgba(124,158,122,.65);transform:translateY(-1px)}.thrn-auth-dot{width:6px;height:6px;border-radius:50%;background:#7c9e7a;box-shadow:0 0 0 3px rgba(124,158,122,.12)}.thrn-auth-status{color:#a8c4a6}@media(max-width:700px){.thrn-auth-cta{top:10px;right:14px;padding:8px 11px;font-size:12px}.thrn-auth-cta .thrn-auth-label{display:none}}';
+    style.textContent = '.thrn-auth-wrap{position:fixed;top:12px;right:40px;z-index:9999;font:500 13px/1.2 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.thrn-auth-profile{width:38px;height:38px;padding:0;border:1px solid rgba(124,158,122,.38);border-radius:50%;display:grid;place-items:center;background:rgba(17,19,24,.92);color:#dfe8dd;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.24);backdrop-filter:blur(14px);transition:background .15s,border-color .15s,transform .12s}.thrn-auth-profile:hover{background:rgba(124,158,122,.14);border-color:rgba(124,158,122,.65);transform:translateY(-1px)}.thrn-auth-profile svg{width:19px;height:19px}.thrn-auth-menu{position:absolute;top:46px;right:0;width:220px;padding:10px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(17,19,24,.97);box-shadow:0 18px 50px rgba(0,0,0,.42);backdrop-filter:blur(18px);display:none}.thrn-auth-menu.open{display:block}.thrn-auth-title{padding:8px 10px 4px;color:#e4e9e2;font-size:14px}.thrn-auth-copy{padding:2px 10px 10px;color:#9ca39d;font-size:12px;line-height:1.45}.thrn-auth-signin,.thrn-auth-signout{width:100%;border:0;border-radius:8px;padding:10px 12px;background:#7c9e7a;color:#111510;font:600 13px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}.thrn-auth-signin:hover,.thrn-auth-signout:hover{filter:brightness(1.06)}.thrn-auth-user{padding:8px 10px 10px;color:#a8c4a6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:700px){.thrn-auth-wrap{top:10px;right:14px}.thrn-auth-profile{width:36px;height:36px}.thrn-auth-menu{right:0;width:210px}}';
     document.head.appendChild(style);
 
-    const cta = document.createElement('a');
-    cta.className = 'thrn-auth-cta';
-    cta.href = '/auth/google';
-    cta.innerHTML = '<span class="thrn-auth-dot" aria-hidden="true"></span><span class="thrn-auth-label">Sign in with Google</span>';
-    cta.setAttribute('aria-label', 'Sign in with Google');
-    document.body.appendChild(cta);
+    const wrap = document.createElement('div');
+    wrap.className = 'thrn-auth-wrap';
+
+    const profile = document.createElement('button');
+    profile.type = 'button';
+    profile.className = 'thrn-auth-profile';
+    profile.setAttribute('aria-label', 'Profile');
+    profile.setAttribute('aria-expanded', 'false');
+    profile.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 20c.8-3.2 3-5 6.5-5s5.7 1.8 6.5 5"></path></svg>';
+
+    const menu = document.createElement('div');
+    menu.className = 'thrn-auth-menu';
+    menu.innerHTML = '<div class="thrn-auth-title">Welcome to THRN</div><div class="thrn-auth-copy">Sign in to sync your chats and get the full THRN experience.</div><button type="button" class="thrn-auth-signin">Sign in</button>';
+
+    const closeMenu = () => {
+      menu.classList.remove('open');
+      profile.setAttribute('aria-expanded', 'false');
+    };
+
+    profile.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const open = menu.classList.toggle('open');
+      profile.setAttribute('aria-expanded', String(open));
+    });
+
+    menu.addEventListener('click', (event) => event.stopPropagation());
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMenu();
+    });
+
+    const signin = menu.querySelector('.thrn-auth-signin');
+    signin.addEventListener('click', () => { window.location.assign('/auth/google'); });
+
+    wrap.appendChild(profile);
+    wrap.appendChild(menu);
+    document.body.appendChild(wrap);
 
     const replaceAuthCopy = () => {
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -102,10 +133,8 @@ export function patchAuth(html: string): string {
       .then((response) => response.ok ? response.json() : null)
       .then((data) => {
         if (data && data.authenticated) {
-          cta.href = '/auth/logout';
-          cta.setAttribute('aria-label', 'Sign out');
-          cta.innerHTML = '<span class="thrn-auth-dot" aria-hidden="true"></span><span class="thrn-auth-label">' + (data.user?.name ? String(data.user.name).replace(/[<>]/g, '') : 'Signed in') + '</span>';
-          cta.title = 'Sign out';
+          menu.innerHTML = '<div class="thrn-auth-title">Your THRN account</div><div class="thrn-auth-user">' + (data.user?.name ? String(data.user.name).replace(/[<>]/g, '') : 'Signed in') + '</div><button type="button" class="thrn-auth-signout">Sign out</button>';
+          menu.querySelector('.thrn-auth-signout').addEventListener('click', () => { window.location.assign('/auth/logout'); });
         }
       })
       .catch(() => {});
