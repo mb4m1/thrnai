@@ -56,6 +56,83 @@ export function patchChatMarkdownRenderer(html: string): string {
   return html.includes(needle) ? html.replace(needle, replacement) : html;
 }
 
+export function patchSynapse(html: string): string {
+  const styles = `
+/* ── SYNAPSE ────────────────────────────────────────────────── */
+.synapse-band { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 100px 40px; }
+.synapse-inner { max-width: 1100px; margin: 0 auto; }
+.synapse-head { max-width: 720px; margin-bottom: 52px; }
+.synapse-mark { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold-text); margin-bottom: 16px; }
+.synapse-mark::before { content: ''; width: 20px; height: 1px; background: var(--gold); }
+.synapse-title { font-family: var(--serif); font-size: clamp(38px, 5vw, 64px); font-weight: 400; line-height: 1.04; letter-spacing: -.025em; color: var(--text); margin-bottom: 16px; }
+.synapse-title em { color: var(--gold-text); font-style: italic; }
+.synapse-intro { font-size: 16px; color: var(--text-2); line-height: 1.75; max-width: 650px; font-weight: 300; }
+.synapse-grid { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 42px; }
+.synapse-card { position: relative; background: var(--base); padding: 30px 28px 32px; }
+.synapse-card + .synapse-card { border-left: 1px solid var(--border); }
+.synapse-num { font-family: var(--serif); font-size: 32px; color: var(--text-3); line-height: 1; margin-bottom: 22px; }
+.synapse-name { font-family: var(--serif); font-size: 23px; color: var(--text); margin-bottom: 9px; }
+.synapse-desc { font-size: 13.5px; color: var(--text-2); line-height: 1.7; font-weight: 300; }
+.synapse-closer { border-top: 1px solid var(--border); padding-top: 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.synapse-closer-copy { max-width: 620px; }
+.synapse-closer-title { font-family: var(--serif); font-size: 25px; color: var(--text); margin-bottom: 7px; }
+.synapse-closer-title em { color: var(--gold-text); font-style: italic; }
+.synapse-closer-text { font-size: 13.5px; color: var(--text-2); line-height: 1.7; font-weight: 300; }
+.synapse-coming { flex-shrink: 0; padding: 8px 14px; border: 1px solid var(--gold-border); border-radius: 20px; color: var(--gold-text); background: var(--gold-dim); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+@media (max-width: 768px) {
+  .synapse-band { padding: 80px 20px; }
+  .synapse-grid { grid-template-columns: 1fr; }
+  .synapse-card + .synapse-card { border-left: none; border-top: 1px solid var(--border); }
+  .synapse-closer { align-items: flex-start; flex-direction: column; gap: 20px; }
+}
+`;
+
+  const section = `
+<!-- SYNAPSE -->
+<section class="synapse-band" id="synapse">
+  <div class="synapse-inner">
+    <div class="synapse-head">
+      <div class="synapse-mark">SYNAPSE™</div>
+      <h2 class="synapse-title">The intelligence layer behind <em>AI visibility.</em></h2>
+      <p class="synapse-intro">Your customers aren't only searching Google anymore. They're asking AI systems what to buy, who to trust, and which brands matter. SYNAPSE helps make sure your brand is understood in those conversations.</p>
+    </div>
+
+    <div class="synapse-grid">
+      <div class="synapse-card">
+        <div class="synapse-num">01</div>
+        <div class="synapse-name">Understand</div>
+        <p class="synapse-desc">Maps your brand, entity, audience, positioning, content and existing signals.</p>
+      </div>
+      <div class="synapse-card">
+        <div class="synapse-num">02</div>
+        <div class="synapse-name">Connect</div>
+        <p class="synapse-desc">Identifies how those signals connect across search, content, authority and AI discovery.</p>
+      </div>
+      <div class="synapse-card">
+        <div class="synapse-num">03</div>
+        <div class="synapse-name">Optimize</div>
+        <p class="synapse-desc">Turns the gaps into actionable AEO/AIO improvements designed to strengthen how AI systems discover, understand and surface your brand.</p>
+      </div>
+    </div>
+
+    <div class="synapse-closer">
+      <div class="synapse-closer-copy">
+        <div class="synapse-closer-title">Built for the <em>next layer of discovery.</em></div>
+        <p class="synapse-closer-text">Search gets you found. SYNAPSE helps AI understand why you matter.</p>
+      </div>
+      <div class="synapse-coming">Coming Soon</div>
+    </div>
+  </div>
+</section>
+`;
+
+  let patched = html;
+  if (patched.includes("</style>")) patched = patched.replace("</style>", `${styles}</style>`);
+  return patched.includes("<!-- HOW IT WORKS -->")
+    ? patched.replace("<!-- HOW IT WORKS -->", `${section}\n<!-- HOW IT WORKS -->`)
+    : patched;
+}
+
 export function patchAuth(html: string): string {
   const script = `<script nonce="${NONCE_PLACEHOLDER}">
 (() => {
@@ -145,7 +222,7 @@ export function patchAuth(html: string): string {
 }
 
 export function renderThrnDocument(nonce: string): string {
-  const patched = patchChatMarkdownRenderer(thrnHtml);
+  const patched = patchSynapse(patchChatMarkdownRenderer(thrnHtml));
   return patchAuth(patched).replaceAll(NONCE_PLACEHOLDER, nonce);
 }
 
