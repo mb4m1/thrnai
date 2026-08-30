@@ -141,8 +141,6 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         try {
-          // GPT-OSS is the primary THRN model. Llama is a compatibility fallback
-          // so a temporary model/runtime issue does not take the entire chat down.
           const models = [
             "@cf/openai/gpt-oss-20b",
             "@cf/meta/llama-3.1-8b-instruct",
