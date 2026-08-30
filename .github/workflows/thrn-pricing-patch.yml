@@ -2,28 +2,32 @@ name: THRN pricing currency patch
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch-pricing:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Patch pricing section
-        shell: python
         run: |
+          python3 <<'PY'
           from pathlib import Path
           import re
 
           path = Path('src/content/thrn.html')
           html = path.read_text(encoding='utf-8')
 
-          if 'id="pricing"' not in html:
-              styles = r'''
+          if 'id="pricing"' in html:
+              raise SystemExit(0)
+
+          styles = r'''
 <style data-thrn-pricing>
 .pricing-band{background:var(--base);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:100px 40px}
 .pricing-inner{max-width:1120px;margin:0 auto}
@@ -53,7 +57,7 @@ jobs:
 </style>
 '''
 
-              section = r'''
+          section = r'''
 <section class="pricing-band" id="pricing">
   <div class="pricing-inner">
     <div class="pricing-head">
@@ -109,28 +113,21 @@ jobs:
 </section>
 '''
 
-              if '</style>' in html:
-                  html = html.replace('</style>', styles + '\n</style>', 1)
-              else:
-                  html = html.replace('</head>', styles + '\n</head>', 1)
+          html = html.replace('</style>', styles + '\n</style>', 1)
 
-              marker = re.search(r'(<section[^>]+(?:id=["\']frameworks["\']|id=["\']contact["\'])[^>]*>)', html, re.I)
-              if marker:
-                  html = html[:marker.start()] + section + '\n' + html[marker.start():]
-              else:
-                  body_end = html.lower().rfind('</body>')
-                  html = html[:body_end] + section + '\n' + html[body_end:]
+          marker = re.search(r'(<section[^>]+(?:id=["\']frameworks["\']|id=["\']contact["\'])[^>]*>)', html, re.I)
+          if marker:
+              html = html[:marker.start()] + section + '\n' + html[marker.start():]
+          else:
+              body_end = html.lower().rfind('</body>')
+              html = html[:body_end] + section + '\n' + html[body_end:]
 
-              nav_pattern = re.compile(r'(<a[^>]+href=["\']#frameworks["\'][^>]*>)(Frameworks)(</a>)', re.I)
-              if nav_pattern.search(html) and '#pricing' not in html.split('id="pricing"')[0]:
-                  html = nav_pattern.sub(r'\1\2\3', html, count=1)
-                  nav_match = nav_pattern.search(html)
-                  if nav_match:
-                      insert_at = nav_match.end()
-                      pricing_link = '\n<a href="#pricing">Pricing</a>'
-                      html = html[:insert_at] + pricing_link + html[insert_at:]
+          nav_pattern = re.compile(r'(<a[^>]+href=["\']#frameworks["\'][^>]*>Frameworks</a>)', re.I)
+          nav_match = nav_pattern.search(html)
+          if nav_match and '#pricing' not in html[:nav_match.start()]:
+              html = html[:nav_match.end()] + '\n<a href="#pricing">Pricing</a>' + html[nav_match.end():]
 
-              currency_script = r'''
+          currency_script = r'''
 <script data-thrn-pricing>
 (() => {
   const initPricing = () => {
@@ -154,8 +151,9 @@ jobs:
 })();
 </script>
 '''
-              html = html.replace('</body>', currency_script + '\n</body>')
-              path.write_text(html, encoding='utf-8')
+          html = html.replace('</body>', currency_script + '\n</body>')
+          path.write_text(html, encoding='utf-8')
+          PY
 
       - name: Commit pricing patch
         run: |
