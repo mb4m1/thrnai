@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
-import { getCookie, verifySessionCookie } from "../../lib/auth";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -103,15 +102,6 @@ export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const authSecret = (env as Record<string, string | undefined>).AUTH_SECRET;
-        const user = await verifySessionCookie(getCookie(request, "thrn_session"), authSecret || "");
-        if (!user) {
-          return new Response(JSON.stringify({ error: { code: "auth_required", message: "Please sign in to use THRN chat." } }), {
-            status: 401,
-            headers: { ...jsonHeaders, "cache-control": "no-store" },
-          });
-        }
-
         let body: { system?: string; messages?: ChatMessage[]; max_tokens?: number };
         try {
           body = await request.json();
@@ -147,16 +137,11 @@ export const Route = createFileRoute("/api/chat")({
 
           console.info("[api/chat] Calling Workers AI", {
             model,
-            user: user.sub,
             messageCount: validMessages.length,
             maxTokens,
             inputMode: "messages",
           });
 
-          // Cloudflare supports structured chat messages for gpt-oss-20b.
-          // If a transient/model-side error occurs, retry once with the legacy
-          // prompt format so a temporary schema/runtime issue does not surface
-          // as a broken THRN chat to the user.
           let result: unknown;
           try {
             result = await ai.run(model, {
@@ -185,7 +170,7 @@ export const Route = createFileRoute("/api/chat")({
           return sseTextResponse(text);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.error("[api/chat] Workers AI FAILED", { model, error: message, user: user.sub });
+          console.error("[api/chat] Workers AI FAILED", { model, error: message });
           return new Response(JSON.stringify({ error: { code: "ai_error", message: "THRN couldn't reach the AI engine. Please try again." } }), { status: 503, headers: jsonHeaders });
         }
       },
