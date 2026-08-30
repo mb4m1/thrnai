@@ -8,10 +8,6 @@ interface ChatMessage {
 
 const jsonHeaders = { "content-type": "application/json" };
 
-type WorkersAI = {
-  run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
-};
-
 const THRN_IDENTITY = `You are THRN, an AI marketing consultant created by the THRN team.
 
 Identity rules:
@@ -25,65 +21,18 @@ Identity rules:
 - Return only the user-facing answer.`;
 
 function cleanAIText(text: string): string {
-  let cleaned = text.trim();
-
-  cleaned = cleaned
+  return text
+    .trim()
     .replace(/<\/?(?:think|analysis|reasoning)>/gi, "")
     .replace(/^\s*(?:system|user|assistant|assistant final|final|analysis|reasoning)\s*[:\-]?\s*/i, "")
     .trim();
-
-  const finalMarker = /(?:^|\n)\s*assistant(?:[.\s:_-]*)final\s*:?[ \t]*/gi;
-  const analysisMarker = /(?:^|\n)\s*assistant(?:[.\s:_-]*)analysis\s*:?[ \t]*/gi;
-  const finalMatches = [...cleaned.matchAll(finalMarker)];
-
-  if (finalMatches.length > 0) {
-    const finalMatch = finalMatches[finalMatches.length - 1];
-    const start = (finalMatch.index ?? 0) + finalMatch[0].length;
-    cleaned = cleaned.slice(start).trim();
-  }
-
-  const trailingAnalysis = analysisMarker.exec(cleaned);
-  if (trailingAnalysis?.index !== undefined) {
-    cleaned = cleaned.slice(0, trailingAnalysis.index).trim();
-  }
-
-  return cleaned.trim();
-}
-
-function extractAIText(result: unknown): string | null {
-  if (typeof result === "string" && result.trim()) return cleanAIText(result) || null;
-  if (!result || typeof result !== "object") return null;
-
-  const seen = new Set<object>();
-  const walk = (value: unknown, depth = 0): string | null => {
-    if (depth > 12 || value == null) return null;
-    if (typeof value === "string") return cleanAIText(value) || null;
-    if (typeof value !== "object") return null;
-    const objectValue = value as object;
-    if (seen.has(objectValue)) return null;
-    seen.add(objectValue);
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const text = walk(item, depth + 1);
-        if (text) return text;
-      }
-      return null;
-    }
-
-    const object = value as Record<string, unknown>;
-    for (const key of ["response", "output_text", "text", "generated_text", "content", "message", "delta", "output", "choices", "result", "data"]) {
-      const text = walk(object[key], depth + 1);
-      if (text) return text;
-    }
-    return null;
-  };
-  return walk(result);
 }
 
 function messageText(message: ChatMessage): string {
   if (typeof message.content === "string") return message.content;
-  return message.content.map((block) => typeof block?.text === "string" ? block.text : "").join("");
+  return message.content
+    .map((block) => typeof block?.text === "string" ? block.text : "")
+    .join("");
 }
 
 function isSimpleGreeting(text: string): boolean {
@@ -91,87 +40,157 @@ function isSimpleGreeting(text: string): boolean {
 }
 
 function sseTextResponse(text: string): Response {
-  const event = { type: "content_block_delta", delta: { type: "text_delta", text } };
+  const event = {
+    type: "content_block_delta",
+    delta: { type: "text_delta", text },
+  };
+
   return new Response(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`, {
     status: 200,
-    headers: { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform" },
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+    },
   });
+}
+
+function extractResponse(result: unknown): string | null {
+  if (typeof result === "string") return cleanAIText(result) || null;
+  if (!result || typeof result !== "object") return null;
+
+  const object = result as Record<string, unknown>;
+  const candidates = [
+    object.response,
+    object.output_text,
+    object.text,
+    object.generated_text,
+    object.content,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return cleanAIText(candidate) || null;
+    }
+  }
+
+  return null;
 }
 
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        let body: { system?: string; messages?: ChatMessage[]; max_tokens?: number };
+        let body: {
+          system?: string;
+          messages?: ChatMessage[];
+          max_tokens?: number;
+        };
+
         try {
           body = await request.json();
         } catch {
-          return new Response(JSON.stringify({ error: { message: "Invalid JSON body" } }), { status: 400, headers: jsonHeaders });
+          return new Response(
+            JSON.stringify({ error: { message: "Invalid JSON body" } }),
+            { status: 400, headers: jsonHeaders },
+          );
         }
 
         const messages = Array.isArray(body.messages) ? body.messages : [];
-        const validMessages = messages.filter((m) => m && (m.role === "user" || m.role === "assistant") && (typeof m.content === "string" || Array.isArray(m.content)));
-        const latestUserMessage = [...validMessages].reverse().find((message) => message.role === "user");
-        const latestUserText = latestUserMessage ? messageText(latestUserMessage).trim() : "";
+        const validMessages = messages.filter(
+          (m) =>
+            m &&
+            (m.role === "user" || m.role === "assistant") &&
+            (typeof m.content === "string" || Array.isArray(m.content)),
+        );
+
+        const latestUserMessage = [...validMessages]
+          .reverse()
+          .find((message) => message.role === "user");
+        const latestUserText = latestUserMessage
+          ? messageText(latestUserMessage).trim()
+          : "";
 
         if (isSimpleGreeting(latestUserText)) {
-          return sseTextResponse("Hi! I'm THRN — your marketing consultant. Tell me what you're working on, and I'll ask the right questions before giving you a strategy.");
+          return sseTextResponse(
+            "Hi! I'm THRN — your marketing consultant. Tell me what you're working on, and I'll ask the right questions before giving you a strategy.",
+          );
         }
 
         const combinedSystem = `${THRN_IDENTITY}\n\n${body.system?.trim() || ""}`.trim();
-        const aiMessages: Array<Record<string, unknown>> = [
+        const aiMessages = [
           { role: "system", content: combinedSystem },
+          ...validMessages
+            .map((message) => ({
+              role: message.role,
+              content: messageText(message).trim(),
+            }))
+            .filter((message) => message.content),
         ];
 
-        for (const message of validMessages) {
-          const content = messageText(message).trim();
-          if (content) aiMessages.push({ role: message.role, content });
+        const maxTokens = Math.min(body.max_tokens ?? 1000, 2000);
+        const ai = env.AI;
+
+        if (!ai) {
+          console.error("[api/chat] Workers AI binding AI is unavailable");
+          return new Response(
+            JSON.stringify({
+              error: { code: "ai_unavailable", message: "THRN's AI engine is temporarily unavailable." },
+            }),
+            { status: 503, headers: jsonHeaders },
+          );
         }
 
-        const maxTokens = Math.min(body.max_tokens ?? 1000, 2000);
-        const model = "@cf/openai/gpt-oss-20b";
-
         try {
-          const ai = env.AI as WorkersAI | undefined;
-          if (!ai) throw new Error("Workers AI binding AI is unavailable at runtime");
+          // GPT-OSS is the primary THRN model. Llama is a compatibility fallback
+          // so a temporary model/runtime issue does not take the entire chat down.
+          const models = [
+            "@cf/openai/gpt-oss-20b",
+            "@cf/meta/llama-3.1-8b-instruct",
+          ];
 
-          console.info("[api/chat] Calling Workers AI", {
-            model,
-            messageCount: validMessages.length,
-            maxTokens,
-            inputMode: "messages",
-          });
+          let responseText: string | null = null;
+          let lastError: unknown = null;
 
-          let result: unknown;
-          try {
-            result = await ai.run(model, {
-              messages: aiMessages,
-              max_tokens: maxTokens,
-              temperature: 0.4,
-            });
-          } catch (firstError) {
-            console.warn("[api/chat] Structured message call failed; retrying with prompt format", {
-              error: firstError instanceof Error ? firstError.message : String(firstError),
-            });
+          for (const model of models) {
+            try {
+              const result = await ai.run(model, {
+                messages: aiMessages,
+                max_tokens: maxTokens,
+                temperature: 0.4,
+              });
 
-            const prompt = aiMessages
-              .map((message) => `${String(message.role).toUpperCase()}:\n${String(message.content ?? "")}`)
-              .join("\n\n") + "\n\nASSISTANT:";
-
-            result = await ai.run(model, {
-              prompt,
-              max_tokens: maxTokens,
-              temperature: 0.4,
-            });
+              responseText = extractResponse(result);
+              if (responseText) break;
+            } catch (error) {
+              lastError = error;
+              console.warn("[api/chat] Model attempt failed", {
+                model,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
           }
 
-          const text = extractAIText(result);
-          if (!text) throw new Error("Workers AI returned a response without text");
-          return sseTextResponse(text);
+          if (!responseText) {
+            throw lastError instanceof Error
+              ? lastError
+              : new Error("Workers AI returned no text response");
+          }
+
+          return sseTextResponse(responseText);
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error("[api/chat] Workers AI FAILED", { model, error: message });
-          return new Response(JSON.stringify({ error: { code: "ai_error", message: "THRN couldn't reach the AI engine. Please try again." } }), { status: 503, headers: jsonHeaders });
+          console.error("[api/chat] Workers AI FAILED", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "ai_error",
+                message: "THRN couldn't reach the AI engine. Please try again.",
+              },
+            }),
+            { status: 503, headers: jsonHeaders },
+          );
         }
       },
     },
