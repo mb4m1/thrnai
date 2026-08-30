@@ -1,4 +1,4 @@
-name: Apply THRN pricing
+name: Restore THRN constellation
 
 on:
   push:
@@ -8,156 +8,154 @@ permissions:
   contents: write
 
 jobs:
-  pricing:
-    if: ${{ !startsWith(github.event.head_commit.message, 'THRN pricing:') }}
+  restore:
+    if: ${{ !startsWith(github.event.head_commit.message, 'THRN constellation:') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Patch pricing section
+      - name: Restore constellation animation
         shell: python
         run: |
           from pathlib import Path
-          import re
 
           path = Path('src/content/thrn.html')
           text = path.read_text(encoding='utf-8')
+          marker = '// ── THRN constellation network ──'
 
-          if '<!-- THRN PRICING START -->' not in text:
-              nav = '<li><a href="#pricing">Pricing</a></li>\n    <li><a href="#contact">Contact</a></li>'
-              text = text.replace('<li><a href="#frameworks">Frameworks</a></li>\n    <li><a href="#contact">Contact</a></li>', nav, 1)
-
-              mobile = '<a href="#frameworks" data-action="close-menu">Frameworks</a>\n  <a href="#pricing" data-action="close-menu">Pricing</a>\n  <a href="#chat-section" data-action="close-menu" class="m-cta">Talk to THRN</a>'
-              text = text.replace('<a href="#frameworks" data-action="close-menu">Frameworks</a>\n  <a href="#chat-section" data-action="close-menu" class="m-cta">Talk to THRN</a>', mobile, 1)
-
-              css = r'''
-
-  /* ── PRICING ───────────────────────────────────────────────── */
-  #pricing { border-top: 1px solid var(--border); padding: 100px 40px; background: var(--base); }
-  .pricing-inner { max-width: 1100px; margin: 0 auto; }
-  .pricing-head { display:flex; align-items:flex-end; justify-content:space-between; gap:30px; margin-bottom:52px; }
-  .pricing-head .sec-sub { margin-bottom:0; }
-  .currency-toggle { display:inline-flex; align-items:center; padding:4px; border:1px solid var(--border-med); border-radius:999px; background:var(--surface); flex-shrink:0; }
-  .currency-btn { border:0; background:transparent; color:var(--text-3); font:500 12px var(--sans); padding:7px 13px; border-radius:999px; cursor:pointer; transition:all .18s; }
-  .currency-btn.active { background:var(--card-2); color:var(--text); box-shadow:0 1px 8px rgba(0,0,0,.25); }
-  .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; align-items:stretch; }
-  .price-card { position:relative; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:32px; min-height:390px; }
-  .price-card.pro { border-color:var(--gold-border); background:linear-gradient(180deg, var(--gold-dim), var(--surface) 42%); box-shadow:0 20px 60px -42px rgba(124,158,122,.45); }
-  .price-popular { position:absolute; top:16px; right:16px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--gold-text); border:1px solid var(--gold-border); background:var(--gold-dim); border-radius:999px; padding:4px 8px; }
-  .price-name { font-family:var(--serif); font-size:24px; color:var(--text); margin-bottom:8px; }
-  .price-desc { font-size:13px; color:var(--text-2); min-height:42px; line-height:1.6; font-weight:300; }
-  .price-value { display:flex; align-items:baseline; gap:5px; margin:24px 0 26px; }
-  .price-amount { font-family:var(--serif); font-size:46px; line-height:1; color:var(--text); letter-spacing:-.03em; }
-  .price-period { font-size:12px; color:var(--text-3); }
-  .price-features { list-style:none; display:flex; flex-direction:column; gap:11px; margin:0 0 28px; }
-  .price-features li { font-size:13px; color:var(--text-2); padding-left:18px; position:relative; line-height:1.45; }
-  .price-features li::before { content:'✓'; position:absolute; left:0; color:var(--gold-text); }
-  .price-cta { margin-top:auto; display:flex; align-items:center; justify-content:center; min-height:42px; border-radius:9px; border:1px solid var(--border-med); color:var(--text-2); text-decoration:none; font-size:13px; font-weight:500; transition:all .18s; }
-  .price-cta:hover { color:var(--text); border-color:var(--border-hi); background:rgba(255,255,255,.03); }
-  .price-card.pro .price-cta { background:var(--gold); border-color:var(--gold); color:#0A0B0F; }
-  .price-card.pro .price-cta:hover { opacity:.88; }
-  @media (max-width:768px) {
-    #pricing { padding:70px 20px; }
-    .pricing-head { align-items:flex-start; flex-direction:column; }
-    .pricing-grid { grid-template-columns:1fr; }
-    .price-card { min-height:auto; }
-  }
-'''
-              text = text.replace('</style>', css + '\n</style>', 1)
-
-              pricing_html = r'''
-<!-- THRN PRICING START -->
-<section id="pricing">
-  <div class="pricing-inner">
-    <div class="pricing-head">
-      <div>
-        <div class="sec-eye">Simple pricing</div>
-        <h2 class="sec-title">A senior marketer,<br>without the retainer</h2>
-        <p class="sec-sub">Start free. Upgrade when you need deeper strategy, audits, and planning.</p>
-      </div>
-      <div class="currency-toggle" role="group" aria-label="Currency">
-        <button class="currency-btn" type="button" data-currency="USD">USD</button>
-        <button class="currency-btn" type="button" data-currency="INR">INR</button>
-      </div>
-    </div>
-    <div class="pricing-grid">
-      <article class="price-card">
-        <div class="price-name">Free</div>
-        <p class="price-desc">Get started with THRN and explore the core consultant experience.</p>
-        <div class="price-value"><span class="price-amount" data-usd="0" data-inr="0">$0</span><span class="price-period">/ month</span></div>
-        <ul class="price-features">
-          <li>Core marketing consultation</li>
-          <li>Consult mode</li>
-          <li>20 messages per day</li>
-        </ul>
-        <a class="price-cta" href="#chat-section">Start free</a>
-      </article>
-      <article class="price-card pro">
-        <span class="price-popular">Most popular</span>
-        <div class="price-name">Pro</div>
-        <p class="price-desc">For founders who want deeper strategic thinking on demand.</p>
-        <div class="price-value"><span class="price-amount" data-usd="5" data-inr="399">$5</span><span class="price-period">/ month</span></div>
-        <ul class="price-features">
-          <li>Everything in Free</li>
-          <li>Consult, Audit &amp; Plan modes</li>
-          <li>Deeper strategic analysis</li>
-          <li>Higher usage limits</li>
-        </ul>
-        <a class="price-cta" href="#chat-section">Choose Pro</a>
-      </article>
-      <article class="price-card">
-        <div class="price-name">Business</div>
-        <p class="price-desc">For teams and businesses that need marketing intelligence at scale.</p>
-        <div class="price-value"><span class="price-amount" data-usd="15" data-inr="1199">$15</span><span class="price-period">/ month</span></div>
-        <ul class="price-features">
-          <li>Everything in Pro</li>
-          <li>Highest usage limits</li>
-          <li>Advanced marketing workflows</li>
-          <li>Priority access</li>
-        </ul>
-        <a class="price-cta" href="#chat-section">Choose Business</a>
-      </article>
-    </div>
-  </div>
-</section>
-<!-- THRN PRICING END -->
-'''
-              marker = '\n<!-- LIVE CHAT -->'
-              text = text.replace(marker, '\n' + pricing_html + marker, 1)
-
+          if marker not in text:
               js = r'''
 
-// ── Pricing currency ─────────────────────────────────────────────────────────
+// ── THRN constellation network ──
 (function () {
-  const buttons = document.querySelectorAll('.currency-btn');
-  const amounts = document.querySelectorAll('.price-amount');
-  if (!buttons.length) return;
-  let saved = localStorage.getItem('thrn-currency');
-  if (saved !== 'USD' && saved !== 'INR') saved = (navigator.language || '').toLowerCase().startsWith('en-in') ? 'INR' : 'USD';
-  function setCurrency(currency) {
-    buttons.forEach(b => b.classList.toggle('active', b.dataset.currency === currency));
-    amounts.forEach(el => { el.textContent = currency === 'INR' ? `₹${el.dataset.inr}` : `$${el.dataset.usd}`; });
-    localStorage.setItem('thrn-currency', currency);
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const hero = document.querySelector('.hero');
+  if (hero && !reduce) {
+    const cv = document.createElement('canvas');
+    cv.id = 'thrn-net';
+    cv.setAttribute('aria-hidden', 'true');
+    hero.insertBefore(cv, hero.firstChild);
+    const ctx = cv.getContext('2d');
+    let w = 0, h = 0, dpr = 1, nodes = [], raf = 0, visible = true;
+    let ptrX = 0, ptrY = 0, tgtX = 0, tgtY = 0, strength = 0, tgtStrength = 0;
+    let lastMove = 0, hasPointer = false, lastT = 0;
+    const R = 170, R2 = R * R;
+    const isTouch = window.matchMedia('(hover: none)').matches ||
+      (navigator.maxTouchPoints || 0) > 0;
+    const ease = (k, dt) => 1 - Math.pow(1 - k, dt);
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = hero.clientWidth; h = hero.clientHeight;
+      cv.width = Math.max(1, w * dpr); cv.height = Math.max(1, h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const cap = isTouch ? 40 : 64;
+      const count = Math.max(16, Math.min(cap, Math.round(w * h / (isTouch ? 22000 : 18000))));
+      nodes = Array.from({ length: count }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.12, vy: (Math.random() - 0.5) * 0.12,
+        r: 0.8 + Math.random() * 1.1, p: Math.random() * Math.PI * 2,
+        ox: 0, oy: 0, a: Math.random() * Math.PI * 2, s: 0.4 + Math.random() * 0.6
+      }));
+      if (!hasPointer) { ptrX = tgtX = w * 0.5; ptrY = tgtY = h * 0.45; }
+    }
+
+    hero.addEventListener('pointermove', (ev) => {
+      if (ev.pointerType === 'touch') return;
+      const rect = hero.getBoundingClientRect();
+      tgtX = ev.clientX - rect.left; tgtY = ev.clientY - rect.top;
+      hasPointer = true; tgtStrength = 1; lastMove = performance.now();
+    }, { passive: true });
+    hero.addEventListener('pointerleave', () => { tgtStrength = 0; }, { passive: true });
+
+    function frame(t) {
+      raf = requestAnimationFrame(frame);
+      if (!visible) { lastT = t; return; }
+      const dt = lastT ? Math.min(3, Math.max(0.2, (t - lastT) / 16.6667)) : 1;
+      lastT = t;
+      if (hasPointer && t - lastMove > 900) tgtStrength = 0;
+      strength += (tgtStrength - strength) * ease(0.03, dt);
+      ptrX += (tgtX - ptrX) * ease(0.08, dt);
+      ptrY += (tgtY - ptrY) * ease(0.08, dt);
+      const ambient = 1 - strength;
+      const ambAmp = isTouch ? 3 : 5;
+      const ambSpeed = isTouch ? 0.0028 : 0.004;
+
+      ctx.clearRect(0, 0, w, h);
+      for (const n of nodes) {
+        n.x += n.vx * dt; n.y += n.vy * dt;
+        if (n.x < 0 || n.x > w) n.vx *= -1;
+        if (n.y < 0 || n.y > h) n.vy *= -1;
+        let dox = 0, doy = 0;
+        n.near = 0;
+        if (strength > 0.01) {
+          const dx = ptrX - n.x, dy = ptrY - n.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < R2) {
+            const f = (1 - Math.sqrt(d2) / R);
+            n.near = f * strength;
+            dox = dx * f * 0.16 * strength;
+            doy = dy * f * 0.16 * strength;
+          }
+        }
+        if (ambient > 0.01) {
+          n.a += ambSpeed * n.s * dt;
+          dox += Math.cos(n.a) * ambAmp * n.s * ambient;
+          doy += Math.sin(n.a * 1.3) * ambAmp * n.s * ambient;
+        }
+        n.ox += (dox - n.ox) * ease(0.045, dt);
+        n.oy += (doy - n.oy) * ease(0.045, dt);
+        n.px = n.x + n.ox; n.py = n.y + n.oy;
+      }
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx = a.px - b.px, dy = a.py - b.py;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 26000) {
+            const boost = 1 + (a.near + b.near) * 0.9;
+            const alpha = Math.min(0.5, (1 - d2 / 26000) * 0.22 * boost);
+            ctx.strokeStyle = 'rgba(124,158,122,' + alpha.toFixed(3) + ')';
+            ctx.lineWidth = 0.6;
+            ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+          }
+        }
+      }
+      for (const n of nodes) {
+        const pulse = 0.5 + 0.5 * Math.sin(t / 1400 + n.p);
+        const alpha = Math.min(0.85, 0.22 + pulse * 0.34 + n.near * 0.3);
+        ctx.fillStyle = 'rgba(168,196,166,' + alpha.toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(n.px, n.py, n.r * (1 + n.near * 0.5), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    resize();
+    raf = requestAnimationFrame(frame);
+    window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', () => { visible = !document.hidden; });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((e) => { visible = e[0].isIntersecting && !document.hidden; }).observe(hero);
+    }
   }
-  buttons.forEach(b => b.addEventListener('click', () => setCurrency(b.dataset.currency)));
-  setCurrency(saved);
 })();
 '''
-              text = text.replace('\n// ── Contact form ──────────────────────────────────────────────────────────────', js + '\n// ── Contact form ──────────────────────────────────────────────────────────────', 1)
-
+              marker_end = '\n</script>\n</body>'
+              if marker_end not in text:
+                  raise SystemExit('Could not find document script boundary')
+              text = text.replace(marker_end, js + marker_end, 1)
               path.write_text(text, encoding='utf-8')
           else:
-              print('Pricing already present; no changes needed.')
+              print('Constellation already present.')
 
-      - name: Commit pricing change
+      - name: Commit restored constellation
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet; then
-            echo "No pricing changes to commit."
+            echo "No changes needed."
           else
             git add src/content/thrn.html
-            git commit -m "THRN pricing: add USD INR toggle"
+            git commit -m "THRN constellation: restore hero network"
             git push
           fi
