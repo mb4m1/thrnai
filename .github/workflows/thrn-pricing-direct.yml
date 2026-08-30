@@ -1,0 +1,163 @@
+name: Apply THRN pricing
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  pricing:
+    if: ${{ !startsWith(github.event.head_commit.message, 'THRN pricing:') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch pricing section
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('src/content/thrn.html')
+          text = path.read_text(encoding='utf-8')
+
+          if '<!-- THRN PRICING START -->' not in text:
+              nav = '<li><a href="#pricing">Pricing</a></li>\n    <li><a href="#contact">Contact</a></li>'
+              text = text.replace('<li><a href="#frameworks">Frameworks</a></li>\n    <li><a href="#contact">Contact</a></li>', nav, 1)
+
+              mobile = '<a href="#frameworks" data-action="close-menu">Frameworks</a>\n  <a href="#pricing" data-action="close-menu">Pricing</a>\n  <a href="#chat-section" data-action="close-menu" class="m-cta">Talk to THRN</a>'
+              text = text.replace('<a href="#frameworks" data-action="close-menu">Frameworks</a>\n  <a href="#chat-section" data-action="close-menu" class="m-cta">Talk to THRN</a>', mobile, 1)
+
+              css = r'''
+
+  /* ── PRICING ───────────────────────────────────────────────── */
+  #pricing { border-top: 1px solid var(--border); padding: 100px 40px; background: var(--base); }
+  .pricing-inner { max-width: 1100px; margin: 0 auto; }
+  .pricing-head { display:flex; align-items:flex-end; justify-content:space-between; gap:30px; margin-bottom:52px; }
+  .pricing-head .sec-sub { margin-bottom:0; }
+  .currency-toggle { display:inline-flex; align-items:center; padding:4px; border:1px solid var(--border-med); border-radius:999px; background:var(--surface); flex-shrink:0; }
+  .currency-btn { border:0; background:transparent; color:var(--text-3); font:500 12px var(--sans); padding:7px 13px; border-radius:999px; cursor:pointer; transition:all .18s; }
+  .currency-btn.active { background:var(--card-2); color:var(--text); box-shadow:0 1px 8px rgba(0,0,0,.25); }
+  .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; align-items:stretch; }
+  .price-card { position:relative; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:32px; min-height:390px; }
+  .price-card.pro { border-color:var(--gold-border); background:linear-gradient(180deg, var(--gold-dim), var(--surface) 42%); box-shadow:0 20px 60px -42px rgba(124,158,122,.45); }
+  .price-popular { position:absolute; top:16px; right:16px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--gold-text); border:1px solid var(--gold-border); background:var(--gold-dim); border-radius:999px; padding:4px 8px; }
+  .price-name { font-family:var(--serif); font-size:24px; color:var(--text); margin-bottom:8px; }
+  .price-desc { font-size:13px; color:var(--text-2); min-height:42px; line-height:1.6; font-weight:300; }
+  .price-value { display:flex; align-items:baseline; gap:5px; margin:24px 0 26px; }
+  .price-amount { font-family:var(--serif); font-size:46px; line-height:1; color:var(--text); letter-spacing:-.03em; }
+  .price-period { font-size:12px; color:var(--text-3); }
+  .price-features { list-style:none; display:flex; flex-direction:column; gap:11px; margin:0 0 28px; }
+  .price-features li { font-size:13px; color:var(--text-2); padding-left:18px; position:relative; line-height:1.45; }
+  .price-features li::before { content:'✓'; position:absolute; left:0; color:var(--gold-text); }
+  .price-cta { margin-top:auto; display:flex; align-items:center; justify-content:center; min-height:42px; border-radius:9px; border:1px solid var(--border-med); color:var(--text-2); text-decoration:none; font-size:13px; font-weight:500; transition:all .18s; }
+  .price-cta:hover { color:var(--text); border-color:var(--border-hi); background:rgba(255,255,255,.03); }
+  .price-card.pro .price-cta { background:var(--gold); border-color:var(--gold); color:#0A0B0F; }
+  .price-card.pro .price-cta:hover { opacity:.88; }
+  @media (max-width:768px) {
+    #pricing { padding:70px 20px; }
+    .pricing-head { align-items:flex-start; flex-direction:column; }
+    .pricing-grid { grid-template-columns:1fr; }
+    .price-card { min-height:auto; }
+  }
+'''
+              text = text.replace('</style>', css + '\n</style>', 1)
+
+              pricing_html = r'''
+<!-- THRN PRICING START -->
+<section id="pricing">
+  <div class="pricing-inner">
+    <div class="pricing-head">
+      <div>
+        <div class="sec-eye">Simple pricing</div>
+        <h2 class="sec-title">A senior marketer,<br>without the retainer</h2>
+        <p class="sec-sub">Start free. Upgrade when you need deeper strategy, audits, and planning.</p>
+      </div>
+      <div class="currency-toggle" role="group" aria-label="Currency">
+        <button class="currency-btn" type="button" data-currency="USD">USD</button>
+        <button class="currency-btn" type="button" data-currency="INR">INR</button>
+      </div>
+    </div>
+    <div class="pricing-grid">
+      <article class="price-card">
+        <div class="price-name">Free</div>
+        <p class="price-desc">Get started with THRN and explore the core consultant experience.</p>
+        <div class="price-value"><span class="price-amount" data-usd="0" data-inr="0">$0</span><span class="price-period">/ month</span></div>
+        <ul class="price-features">
+          <li>Core marketing consultation</li>
+          <li>Consult mode</li>
+          <li>20 messages per day</li>
+        </ul>
+        <a class="price-cta" href="#chat-section">Start free</a>
+      </article>
+      <article class="price-card pro">
+        <span class="price-popular">Most popular</span>
+        <div class="price-name">Pro</div>
+        <p class="price-desc">For founders who want deeper strategic thinking on demand.</p>
+        <div class="price-value"><span class="price-amount" data-usd="5" data-inr="399">$5</span><span class="price-period">/ month</span></div>
+        <ul class="price-features">
+          <li>Everything in Free</li>
+          <li>Consult, Audit &amp; Plan modes</li>
+          <li>Deeper strategic analysis</li>
+          <li>Higher usage limits</li>
+        </ul>
+        <a class="price-cta" href="#chat-section">Choose Pro</a>
+      </article>
+      <article class="price-card">
+        <div class="price-name">Business</div>
+        <p class="price-desc">For teams and businesses that need marketing intelligence at scale.</p>
+        <div class="price-value"><span class="price-amount" data-usd="15" data-inr="1199">$15</span><span class="price-period">/ month</span></div>
+        <ul class="price-features">
+          <li>Everything in Pro</li>
+          <li>Highest usage limits</li>
+          <li>Advanced marketing workflows</li>
+          <li>Priority access</li>
+        </ul>
+        <a class="price-cta" href="#chat-section">Choose Business</a>
+      </article>
+    </div>
+  </div>
+</section>
+<!-- THRN PRICING END -->
+'''
+              marker = '\n<!-- LIVE CHAT -->'
+              text = text.replace(marker, '\n' + pricing_html + marker, 1)
+
+              js = r'''
+
+// ── Pricing currency ─────────────────────────────────────────────────────────
+(function () {
+  const buttons = document.querySelectorAll('.currency-btn');
+  const amounts = document.querySelectorAll('.price-amount');
+  if (!buttons.length) return;
+  let saved = localStorage.getItem('thrn-currency');
+  if (saved !== 'USD' && saved !== 'INR') saved = (navigator.language || '').toLowerCase().startsWith('en-in') ? 'INR' : 'USD';
+  function setCurrency(currency) {
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.currency === currency));
+    amounts.forEach(el => { el.textContent = currency === 'INR' ? `₹${el.dataset.inr}` : `$${el.dataset.usd}`; });
+    localStorage.setItem('thrn-currency', currency);
+  }
+  buttons.forEach(b => b.addEventListener('click', () => setCurrency(b.dataset.currency)));
+  setCurrency(saved);
+})();
+'''
+              text = text.replace('\n// ── Contact form ──────────────────────────────────────────────────────────────', js + '\n// ── Contact form ──────────────────────────────────────────────────────────────', 1)
+
+              path.write_text(text, encoding='utf-8')
+          else:
+              print('Pricing already present; no changes needed.')
+
+      - name: Commit pricing change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No pricing changes to commit."
+          else
+            git add src/content/thrn.html
+            git commit -m "THRN pricing: add USD INR toggle"
+            git push
+          fi
