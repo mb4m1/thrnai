@@ -67,6 +67,14 @@ function extractResponse(result: unknown): string | null {
     object.content,
   ];
 
+  const firstChoice = Array.isArray(object.choices) ? object.choices[0] : null;
+  const choiceMessage = firstChoice && typeof firstChoice === "object"
+    ? (firstChoice as Record<string, unknown>).message
+    : null;
+  if (choiceMessage && typeof choiceMessage === "object") {
+    candidates.push((choiceMessage as Record<string, unknown>).content);
+  }
+
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim()) {
       return cleanAIText(candidate) || null;
@@ -143,7 +151,7 @@ export const Route = createFileRoute("/api/chat")({
         try {
           const models = [
             "@cf/openai/gpt-oss-20b",
-            "@cf/meta/llama-3.1-8b-instruct",
+            "@cf/meta/llama-3.2-3b-instruct",
           ];
 
           let responseText: string | null = null;
