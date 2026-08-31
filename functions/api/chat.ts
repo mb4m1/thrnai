@@ -35,6 +35,11 @@ function isSimpleGreeting(text: string): boolean {
   );
 }
 
+function cleanApiKey(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/^['\"]|['\"]$/g, "");
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
@@ -91,11 +96,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       contents.push({ role: "user", parts: [{ text: latestUserText }] });
     }
 
-    const apiKey = (env.GEMINI_API_KEY as string) || "";
+    // Cloudflare Pages exposes the secret as GEMINI_API_KEY.
+    // Trim accidental whitespace/quotes from dashboard copy-paste.
+    const apiKey = cleanApiKey(env.GEMINI_API_KEY);
 
     if (!apiKey) {
       const demoResponse =
-        "THRN AI Engine: Please ensure your GEMINI_API_KEY environment variable is configured in your Cloudflare Pages project settings (Settings > Environment Variables), then redeploy.";
+        "THRN AI Engine: GEMINI_API_KEY is not available to this production function. Check the Cloudflare Pages Production environment and redeploy.";
       return new Response(JSON.stringify({ answer: demoResponse, content: demoResponse }), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -106,29 +113,27 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         parts: [{ text: systemPrompt }],
       },
       contents,
-      generationConfig: {
-        temperature: 0.5,
-      },
     };
 
-    // Try models in order: gemini-2.5-flash, gemini-1.5-flash, gemini-2.0-flash
-    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"];
+    // Gemini 3.7 Flash is the current THRN engine. Gemini 3.x does not use
+    // the legacy temperature/top_p/top_k generation parameters.
+    const modelsToTry = ["gemini-3.7-flash", "gemini-2.5-flash-lite", "gemini-2.5-flash"];
     let res: Response | null = null;
     let lastErrorText = "";
 
     for (const model of modelsToTry) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
         res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
           body: JSON.stringify(payload),
         });
-        if (res.ok) {
-          break;
-        } else {
-          lastErrorText = await res.text().catch(() => "");
-        }
+        if (res.ok) break;
+        lastErrorText = `${res.status} ${await res.text().catch(() => "")}`;
       } catch (fetchErr) {
         lastErrorText = String(fetchErr);
       }
@@ -136,12 +141,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!res || !res.ok) {
       console.error("[Cloudflare /api/chat] Gemini API error:", lastErrorText);
-      const fallbackMsg = "THRN: Unable to connect with the AI engine. Please verify your GEMINI_API_KEY in Cloudflare Pages environment variables.";
+      const fallbackMsg = "THRN: The AI engine is currently unavailable. The API key is reaching Cloudflare, but Gemini rejected the generation request. Please try again after the deployment finishes.";
       return new Response(
         JSON.stringify({
           error: { code: "ai_error", message: fallbackMsg },
           answer: fallbackMsg,
-          content: fallbackMsg
+          content: fallbackMsg,
         }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
@@ -151,7 +156,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
     const answer =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm here to help you structure your marketing strategy.";
+      data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "I'm here to help you structure your marketing strategy.";
 
     return new Response(JSON.stringify({ answer, content: answer }), {
       headers: { "Content-Type": "application/json", ...corsHeaders },
