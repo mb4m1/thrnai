@@ -101,8 +101,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // Call Gemini 3.7 Flash API via Google Generative Language REST API
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`;
     const payload = {
       system_instruction: {
         parts: [{ text: systemPrompt }],
@@ -113,23 +111,35 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       },
     };
 
-    const res = await fetch(geminiUrl, {
+    // Call Gemini API via Google Generative Language REST API with fallback
+    let res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "aistudio-build",
       },
       body: JSON.stringify(payload),
     });
+
+    if (!res.ok) {
+      // Try fallback to gemini-2.0-flash
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    }
 
     if (!res.ok) {
       const errText = await res.text();
       console.error("[Cloudflare /api/chat] Gemini API error:", res.status, errText);
       return new Response(
         JSON.stringify({
-          error: { code: "ai_error", message: "THRN couldn't reach the AI engine right now. Please try again." },
+          error: { code: "ai_error", message: `AI Engine connection error: ${res.status}. Check if your GEMINI_API_KEY is valid.` },
+          answer: "THRN was unable to connect with the AI model at this moment. Please check your Gemini API key in Cloudflare Pages.",
         }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
