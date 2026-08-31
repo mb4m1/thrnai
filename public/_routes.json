@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "include": [
+    "/api/*",
+    "/auth/*"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/favicon.ico",
+    "/robots.txt",
+    "/THRN-logo.jpeg",
+    "/*.*"
+  ]
+}
