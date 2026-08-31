@@ -1,0 +1,8 @@
+{
+  "name": "THRN Marketing Intelligence",
+  "description": "AI marketing consultant for strategy, audits, and growth plans. The senior marketer you actually need.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
