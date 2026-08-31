@@ -95,7 +95,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!apiKey) {
       const demoResponse =
-        "THRN AI Engine: Please ensure your GEMINI_API_KEY secret is configured in your Cloudflare Pages project settings (Environment Variables).";
+        "THRN AI Engine: Please ensure your GEMINI_API_KEY environment variable is configured in your Cloudflare Pages project settings (Settings > Environment Variables), then redeploy.";
       return new Response(JSON.stringify({ answer: demoResponse, content: demoResponse }), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -111,33 +111,37 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       },
     };
 
-    // Call Gemini API via Google Generative Language REST API with fallback
-    let res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    // Try models in order: gemini-2.5-flash, gemini-1.5-flash, gemini-2.0-flash
+    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"];
+    let res: Response | null = null;
+    let lastErrorText = "";
 
-    if (!res.ok) {
-      // Try fallback to gemini-2.0-flash
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    for (const model of modelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          break;
+        } else {
+          lastErrorText = await res.text().catch(() => "");
+        }
+      } catch (fetchErr) {
+        lastErrorText = String(fetchErr);
+      }
     }
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[Cloudflare /api/chat] Gemini API error:", res.status, errText);
+    if (!res || !res.ok) {
+      console.error("[Cloudflare /api/chat] Gemini API error:", lastErrorText);
+      const fallbackMsg = "THRN: Unable to connect with the AI engine. Please verify your GEMINI_API_KEY in Cloudflare Pages environment variables.";
       return new Response(
         JSON.stringify({
-          error: { code: "ai_error", message: `AI Engine connection error: ${res.status}. Check if your GEMINI_API_KEY is valid.` },
-          answer: "THRN was unable to connect with the AI model at this moment. Please check your Gemini API key in Cloudflare Pages.",
+          error: { code: "ai_error", message: fallbackMsg },
+          answer: fallbackMsg,
+          content: fallbackMsg
         }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
