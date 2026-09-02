@@ -7,6 +7,37 @@ import { GrowthAuditCard } from './components/GrowthAuditCard';
 import { ChatMessage, ConsultantMode } from './types';
 import { Sparkles, Compass, ShieldAlert, ArrowDown } from 'lucide-react';
 
+const AIO_AEO_FRAMEWORK = `THRN FRAMEWORK FRM-AIO-AEO-013 — AIO/AEO RISK ASSESSMENT
+
+Use this framework only when Audit Mode is active and the user's query concerns AI visibility, generative search visibility, citation loss, brand exclusion, disappearing from AI recommendations, AIO/AEO, or traffic loss plausibly related to AI search.
+
+Objective: Diagnose whether AI systems can access, understand, extract, trust, and recommend the brand.
+
+PHASE 1 — AI ACCESSIBILITY & DATA GROUNDING
+- Check robots.txt for accidental blocking of relevant AI crawlers such as GPTBot, ClaudeBot, Google-Extended, and PerplexityBot.
+- Check entity consistency across authoritative sources such as Wikidata, Wikipedia, Crunchbase, official social profiles, and reputable industry directories.
+- Check Organization, Product, and Author JSON-LD on relevant pages.
+- Treat these as risk signals, not guaranteed causes. Do not claim that AI systems use a universal confidence score or deterministic filtering mechanism.
+
+PHASE 2 — INFORMATION EXTRACTION & FORMATTING
+- Check whether important pages are easy to scan and extract: short sections, bullets, tables, clear terminology, and useful structure.
+- Check whether H2/H3 headings match real conversational questions and search intent rather than vague creative teasers.
+- Check whether important informational pages place a concise direct answer near the relevant question (an AEO Snapshot, typically around 40–60 words when appropriate).
+- Treat structured formatting as an extraction/readability advantage, not a guaranteed ranking or citation factor.
+
+PHASE 3 — SENTIMENT & AUTHORITY VALIDATION
+- Check off-site evidence across relevant review and community channels such as Reddit, Quora, G2, Trustpilot, and relevant industry sources.
+- Check whether the brand is repeatedly mentioned alongside category leaders and competitors in credible content, PR, reviews, and industry discussions.
+- Assess whether the public evidence supports the brand's category association and recommendation potential.
+
+DIAGNOSTIC SEQUENCE
+Start with these three questions before prescribing a large remediation plan:
+1. Have you explicitly blocked AI crawlers in robots.txt, or updated your JSON-LD/schema markup in the last 12 months?
+2. When you ask Perplexity, ChatGPT, or another generative search system to recommend a solution in your niche, does your brand appear? If yes, what does it say about you?
+3. Is your primary content mostly long-form narrative, or does it use structured Q&A sections, tables, bullets, and concise direct answers?
+
+After the user answers, map the evidence to Phase 1, 2, and 3, identify the highest-probability risk areas, distinguish verified facts from hypotheses, and recommend the next diagnostic actions. Do not pretend THRN has direct access to private crawler logs, proprietary AI ranking signals, or hidden model confidence scores unless the user provides that evidence.`;
+
 const MODE_GREETINGS: Record<ConsultantMode, string> = {
   consult:
     "Hi, I'm **THRN** — your senior marketing intelligence consultant. Tell me what growth milestone or marketing challenge you're navigating, and I'll isolate the root constraint before recommending a high-conviction strategy.",
@@ -35,7 +66,6 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom when messages update
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
@@ -44,19 +74,16 @@ export default function App() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Track scroll position to show scroll-to-bottom helper button
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
     setShowScrollBottom(scrollHeight - scrollTop - clientHeight > 180);
   };
 
-  // Change consultant mode
   const handleSelectMode = (mode: ConsultantMode) => {
     if (mode === currentMode) return;
     setCurrentMode(mode);
 
-    // Add a context notification or switch greeting
     const newGreeting: ChatMessage = {
       id: `mode-switch-${Date.now()}`,
       role: 'assistant',
@@ -67,7 +94,6 @@ export default function App() {
     setMessages((prev) => [...prev, newGreeting]);
   };
 
-  // Reset conversation
   const handleClearChat = () => {
     setMessages([
       {
@@ -80,7 +106,6 @@ export default function App() {
     ]);
   };
 
-  // Send message to Gemini backend
   const handleSendMessage = async (textToSend?: string) => {
     const queryText = (textToSend || input).trim();
     if (!queryText || isLoading) return;
@@ -100,11 +125,16 @@ export default function App() {
     setIsLoading(true);
 
     try {
-      // Format payload for /api/chat
       const payloadMessages = newMessages.map((m) => ({
         role: m.role,
         content: m.content,
       }));
+
+      const isAioAeoQuery =
+        currentMode === 'audit' &&
+        /\b(AIO|AEO|AI\s+(?:search|visibility|engine|overview|recommendation)|generative\s+search|ChatGPT|Perplexity|Claude|AI\s+crawler|citation(?:s)?|brand\s+(?:visibility|exclusion)|AI\s+traffic)\b/i.test(
+          queryText
+        );
 
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -114,6 +144,7 @@ export default function App() {
         body: JSON.stringify({
           messages: payloadMessages,
           mode: currentMode,
+          ...(isAioAeoQuery ? { system: AIO_AEO_FRAMEWORK } : {}),
         }),
       });
 
@@ -157,7 +188,6 @@ export default function App() {
   };
 
   const handleRetryLastMessage = () => {
-    // Find the last user message
     const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
     if (lastUserMsg) {
       handleSendMessage(lastUserMsg.content);
@@ -166,7 +196,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-[#08090e] text-[#e6e8ee] overflow-hidden">
-      {/* Top Header & Navigation */}
       <ChatHeader
         currentMode={currentMode}
         onSelectMode={handleSelectMode}
@@ -174,15 +203,12 @@ export default function App() {
         messageCount={messages.length}
       />
 
-      {/* Main Chat Workspace */}
       <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto px-3 sm:px-6 relative overflow-hidden">
-        {/* Messages Stream */}
         <div
           ref={chatContainerRef}
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto pt-4 pb-6 pr-1 space-y-2 scroll-smooth"
         >
-          {/* Quick Metrics Diagnostic Drawer */}
           <div className="mb-4">
             <GrowthAuditCard
               onInjectAudit={(text) => handleSendMessage(text)}
@@ -190,7 +216,6 @@ export default function App() {
             />
           </div>
 
-          {/* Render All Messages */}
           {messages.map((msg) => (
             <MessageItem
               key={msg.id}
@@ -199,7 +224,6 @@ export default function App() {
             />
           ))}
 
-          {/* Typing / Thinking Indicator */}
           {isLoading && (
             <div className="flex items-center space-x-3 my-3">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#f2ba53] to-[#b37a1f] flex items-center justify-center text-[#0d0f17] font-bold shadow-md shadow-[#f2ba53]/10">
@@ -217,7 +241,6 @@ export default function App() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Scroll To Bottom Floating Button */}
         {showScrollBottom && (
           <button
             onClick={() => scrollToBottom(true)}
@@ -228,16 +251,13 @@ export default function App() {
           </button>
         )}
 
-        {/* Bottom Input & Suggestions Area */}
         <div className="pt-2 pb-4 bg-gradient-to-t from-[#08090e] via-[#08090e] to-transparent">
-          {/* Prompt Starters */}
           <PromptStarters
             currentMode={currentMode}
             onSelectPrompt={(query) => handleSendMessage(query)}
             disabled={isLoading}
           />
 
-          {/* Interactive Input Bar */}
           <div className="mt-1">
             <ChatInput
               input={input}
