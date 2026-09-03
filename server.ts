@@ -31,6 +31,83 @@ function getGenAI(): GoogleGenAI {
   return genAIClient;
 }
 
+// ── Fallback engines: Claude (Anthropic) then Lovable AI Gateway ───────────
+async function callClaude(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return "";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: contents.map((c) => ({
+          role: c.role === "model" ? "assistant" : "user",
+          content: c.parts.map((p) => p.text).join(""),
+        })),
+      }),
+    });
+    if (!res.ok) {
+      console.error("[api/chat] Claude error:", res.status, await res.text().catch(() => ""));
+      return "";
+    }
+    const data: any = await res.json();
+    return (data?.content || []).map((b: any) => (typeof b?.text === "string" ? b.text : "")).join("").trim();
+  } catch (error) {
+    console.error("[api/chat] Claude request failed:", error);
+    return "";
+  }
+}
+
+async function callGateway(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return "";
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": key,
+        "X-Lovable-AIG-SDK": "fetch",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3.7-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...contents.map((c) => ({
+            role: c.role === "model" ? "assistant" : "user",
+            content: c.parts.map((p) => p.text).join(""),
+          })),
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("[api/chat] Gateway error:", res.status, await res.text().catch(() => ""));
+      return "";
+    }
+    const data: any = await res.json();
+    return String(data?.choices?.[0]?.message?.content || "").trim();
+  } catch (error) {
+    console.error("[api/chat] Gateway request failed:", error);
+    return "";
+  }
+}
+
+function sendSSEText(res: any, text: string) {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  const event = { type: "content_block_delta", delta: { type: "text_delta", text } };
+  res.write(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`);
+  res.end();
+}
+
 const THRN_IDENTITY = `You are THRN, an elite AI marketing consultant created by the THRN team.
 You have 15+ years of experience across B2B SaaS, DTC, e-commerce, consumer apps, brand positioning, and the new AI engine optimization (AEO/AIO) ecosystem.
 
@@ -131,30 +208,25 @@ app.post("/api/chat", async (req, res) => {
     const isSSE = (req.headers.accept || "").includes("text/event-stream");
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
+      // No Gemini key: use Claude first (if configured), then Lovable AI Gateway.
+      const live = (await callClaude(systemPrompt, contents)) || (await callGateway(systemPrompt, contents));
+
       const fallbackResponse =
-        mode === "audit"
+        live ||
+        (mode === "audit"
           ? "In AUDIT mode, we scrutinize your funnel from initial impression to retention. To diagnose your bottleneck: 1) What is your primary traffic source, 2) Where is the steepest drop-off in conversion, and 3) What is your current CAC vs. payback window?"
           : mode === "plan"
           ? "In PLAN mode, we structure actionable growth roadmaps. To build your plan: 1) What is your primary 30-day North Star metric, 2) What are your existing channels, and 3) What is your weekly team bandwidth/budget?"
-          : "To build a high-leverage marketing strategy: 1) What is your core value proposition and wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which distribution channels have shown early traction?";
+          : "To build a high-leverage marketing strategy: 1) What is your core value proposition and wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which distribution channels have shown early traction?");
 
-      if (isSSE) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache, no-transform");
-        res.setHeader("Connection", "keep-alive");
-        const event = {
-          type: "content_block_delta",
-          delta: { type: "text_delta", text: fallbackResponse },
-        };
-        res.write(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`);
-        return res.end();
-      }
+      if (isSSE) return sendSSEText(res, fallbackResponse);
 
       return res.json({
         answer: fallbackResponse,
         content: fallbackResponse,
       });
     }
+
 
     const ai = getGenAI();
 
