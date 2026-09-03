@@ -5,7 +5,12 @@ import { GoogleGenAI } from "@google/genai";
 import { renderThrnDocument } from "./src/renderDocument.ts";
 
 const app = express();
-const PORT = 3000;
+const portArgIndex = process.argv.indexOf("--port");
+const PORT = Number(
+  (portArgIndex !== -1 ? process.argv[portArgIndex + 1] : undefined) ||
+    process.env.PORT ||
+    8080
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
