@@ -31,6 +31,83 @@ function getGenAI(): GoogleGenAI {
   return genAIClient;
 }
 
+// ── Fallback engines: Claude (Anthropic) then Lovable AI Gateway ───────────
+async function callClaude(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return "";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: contents.map((c) => ({
+          role: c.role === "model" ? "assistant" : "user",
+          content: c.parts.map((p) => p.text).join(""),
+        })),
+      }),
+    });
+    if (!res.ok) {
+      console.error("[api/chat] Claude error:", res.status, await res.text().catch(() => ""));
+      return "";
+    }
+    const data: any = await res.json();
+    return (data?.content || []).map((b: any) => (typeof b?.text === "string" ? b.text : "")).join("").trim();
+  } catch (error) {
+    console.error("[api/chat] Claude request failed:", error);
+    return "";
+  }
+}
+
+async function callGateway(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return "";
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Lovable-API-Key": key,
+        "X-Lovable-AIG-SDK": "fetch",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3.7-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...contents.map((c) => ({
+            role: c.role === "model" ? "assistant" : "user",
+            content: c.parts.map((p) => p.text).join(""),
+          })),
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("[api/chat] Gateway error:", res.status, await res.text().catch(() => ""));
+      return "";
+    }
+    const data: any = await res.json();
+    return String(data?.choices?.[0]?.message?.content || "").trim();
+  } catch (error) {
+    console.error("[api/chat] Gateway request failed:", error);
+    return "";
+  }
+}
+
+function sendSSEText(res: any, text: string) {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  const event = { type: "content_block_delta", delta: { type: "text_delta", text } };
+  res.write(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`);
+  res.end();
+}
+
 const THRN_IDENTITY = `You are THRN, an elite AI marketing consultant created by the THRN team.
 You have 15+ years of experience across B2B SaaS, DTC, e-commerce, consumer apps, brand positioning, and the new AI engine optimization (AEO/AIO) ecosystem.
 
