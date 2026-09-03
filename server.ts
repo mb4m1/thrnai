@@ -208,30 +208,25 @@ app.post("/api/chat", async (req, res) => {
     const isSSE = (req.headers.accept || "").includes("text/event-stream");
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
+      // No Gemini key: use Claude first (if configured), then Lovable AI Gateway.
+      const live = (await callClaude(systemPrompt, contents)) || (await callGateway(systemPrompt, contents));
+
       const fallbackResponse =
-        mode === "audit"
+        live ||
+        (mode === "audit"
           ? "In AUDIT mode, we scrutinize your funnel from initial impression to retention. To diagnose your bottleneck: 1) What is your primary traffic source, 2) Where is the steepest drop-off in conversion, and 3) What is your current CAC vs. payback window?"
           : mode === "plan"
           ? "In PLAN mode, we structure actionable growth roadmaps. To build your plan: 1) What is your primary 30-day North Star metric, 2) What are your existing channels, and 3) What is your weekly team bandwidth/budget?"
-          : "To build a high-leverage marketing strategy: 1) What is your core value proposition and wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which distribution channels have shown early traction?";
+          : "To build a high-leverage marketing strategy: 1) What is your core value proposition and wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which distribution channels have shown early traction?");
 
-      if (isSSE) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache, no-transform");
-        res.setHeader("Connection", "keep-alive");
-        const event = {
-          type: "content_block_delta",
-          delta: { type: "text_delta", text: fallbackResponse },
-        };
-        res.write(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`);
-        return res.end();
-      }
+      if (isSSE) return sendSSEText(res, fallbackResponse);
 
       return res.json({
         answer: fallbackResponse,
         content: fallbackResponse,
       });
     }
+
 
     const ai = getGenAI();
 
