@@ -31,7 +31,7 @@ function buildGeminiContents(messages: ChatMessage[]) {
   const source = messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant"))
     .map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
+      role: (m.role === "assistant" ? "model" : "user") as "user" | "model",
       text: textOf(m).trim(),
     }))
     .filter((m) => m.text.length > 0);
