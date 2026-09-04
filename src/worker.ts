@@ -1,3 +1,9 @@
+import {
+  runWorkersAIBinding,
+  type WorkersAIBinding,
+  type WorkersAITurn,
+} from "./workersAI";
+
 export interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
@@ -8,7 +14,7 @@ export interface ExecutionContext {
 }
 
 export interface Env {
-  GEMINI_API_KEY?: string;
+  AI?: WorkersAIBinding;
   AUTH_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
@@ -193,7 +199,7 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHAT HANDLER (Gemini AI Engine)
+// CHAT HANDLER (Cloudflare Workers AI — GPT-OSS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleChat(request: Request, env: Env): Promise<Response> {
