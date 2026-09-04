@@ -1,8 +1,8 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import { renderThrnDocument } from "./src/renderDocument.ts";
+import { runWorkersAIRest, type WorkersAITurn } from "./src/workersAI.ts";
 
 const app = express();
 const portArgIndex = process.argv.indexOf("--port");
@@ -14,90 +14,6 @@ const PORT = Number(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-let genAIClient: GoogleGenAI | null = null;
-function getGenAI(): GoogleGenAI {
-  if (!genAIClient) {
-    const apiKey = process.env.GEMINI_API_KEY || "";
-    genAIClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-  }
-  return genAIClient;
-}
-
-// ── Fallback engines: Claude (Anthropic) then Lovable AI Gateway ───────────
-async function callClaude(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return "";
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
-        max_tokens: 2048,
-        system: systemPrompt,
-        messages: contents.map((c) => ({
-          role: c.role === "model" ? "assistant" : "user",
-          content: c.parts.map((p) => p.text).join(""),
-        })),
-      }),
-    });
-    if (!res.ok) {
-      console.error("[api/chat] Claude error:", res.status, await res.text().catch(() => ""));
-      return "";
-    }
-    const data: any = await res.json();
-    return (data?.content || []).map((b: any) => (typeof b?.text === "string" ? b.text : "")).join("").trim();
-  } catch (error) {
-    console.error("[api/chat] Claude request failed:", error);
-    return "";
-  }
-}
-
-async function callGateway(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) return "";
-  try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Lovable-API-Key": key,
-        "X-Lovable-AIG-SDK": "fetch",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3.7-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...contents.map((c) => ({
-            role: c.role === "model" ? "assistant" : "user",
-            content: c.parts.map((p) => p.text).join(""),
-          })),
-        ],
-      }),
-    });
-    if (!res.ok) {
-      console.error("[api/chat] Gateway error:", res.status, await res.text().catch(() => ""));
-      return "";
-    }
-    const data: any = await res.json();
-    return String(data?.choices?.[0]?.message?.content || "").trim();
-  } catch (error) {
-    console.error("[api/chat] Gateway request failed:", error);
-    return "";
-  }
-}
 
 function sendSSEText(res: any, text: string) {
   res.setHeader("Content-Type", "text/event-stream");
@@ -195,104 +111,34 @@ app.post("/api/chat", async (req, res) => {
 
     const systemPrompt = `${THRN_IDENTITY}\n${modeInstruction}\n${customSystem}`.trim();
 
-    // Format conversation history for Gemini
-    const contents = validMessages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: getMessageText(m) }],
+    const turns: WorkersAITurn[] = validMessages.map((m) => ({
+      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: getMessageText(m),
     }));
-
-    if (contents.length === 0 && latestUserText) {
-      contents.push({ role: "user", parts: [{ text: latestUserText }] });
+    if (turns.length === 0 && latestUserText) {
+      turns.push({ role: "user", content: latestUserText });
     }
 
     const isSSE = (req.headers.accept || "").includes("text/event-stream");
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      // No Gemini key: use Claude first (if configured), then Lovable AI Gateway.
-      const live = (await callClaude(systemPrompt, contents)) || (await callGateway(systemPrompt, contents));
 
-      const fallbackResponse =
-        live ||
-        (mode === "audit"
-          ? "In AUDIT mode, we scrutinize your funnel from initial impression to retention. To diagnose your bottleneck: 1) What is your primary traffic source, 2) Where is the steepest drop-off in conversion, and 3) What is your current CAC vs. payback window?"
-          : mode === "plan"
-          ? "In PLAN mode, we structure actionable growth roadmaps. To build your plan: 1) What is your primary 30-day North Star metric, 2) What are your existing channels, and 3) What is your weekly team bandwidth/budget?"
-          : "To build a high-leverage marketing strategy: 1) What is your core value proposition and wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which distribution channels have shown early traction?");
+    // Local dev has no Workers AI binding; use the Cloudflare Workers AI REST API
+    // when Cloudflare account credentials are present.
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || "";
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN || "";
+    const answer = accountId && apiToken
+      ? await runWorkersAIRest(accountId, apiToken, systemPrompt, turns)
+      : "";
 
-      if (isSSE) return sendSSEText(res, fallbackResponse);
+    const responseText =
+      answer ||
+      (mode === "audit"
+        ? "In AUDIT mode, we scrutinize your funnel from initial impression to retention. To diagnose your bottleneck: 1) What is your primary traffic source, 2) Where is the steepest drop-off in conversion, and 3) What is your current CAC vs. payback window?"
+        : mode === "plan"
+        ? "In PLAN mode, we structure actionable growth roadmaps. To build your plan: 1) What is your primary 30-day North Star metric, 2) What are your existing channels, and 3) What is your weekly team bandwidth/budget?"
+        : "To build a high-leverage marketing strategy: 1) What is your core value proposition and wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which distribution channels have shown early traction?");
 
-      return res.json({
-        answer: fallbackResponse,
-        content: fallbackResponse,
-      });
-    }
-
-
-    const ai = getGenAI();
-
-    if (isSSE) {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache, no-transform");
-      res.setHeader("Connection", "keep-alive");
-
-      try {
-        const responseStream = await ai.models.generateContentStream({
-          model: "gemini-3.7-flash",
-          contents,
-          config: {
-            systemInstruction: systemPrompt,
-            temperature: 0.5,
-          },
-        });
-
-        for await (const chunk of responseStream) {
-          const chunkText = chunk.text;
-          if (chunkText) {
-            const event = {
-              type: "content_block_delta",
-              delta: { type: "text_delta", text: chunkText },
-            };
-            res.write(`data: ${JSON.stringify(event)}\n\n`);
-          }
-        }
-
-        res.write(`data: [DONE]\n\n`);
-        res.end();
-      } catch (streamError) {
-        console.error("[api/chat] Gemini streaming error:", streamError);
-        const fallbackText = "I'm analyzing your request. Based on senior growth principles, let's isolate your core constraint: what is your primary acquisition channel, current conversion rate, and target CAC/LTV ratio?";
-        const event = {
-          type: "content_block_delta",
-          delta: { type: "text_delta", text: fallbackText },
-        };
-        res.write(`data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`);
-        res.end();
-      }
-    } else {
-      const generatePromise = ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: 0.5,
-        },
-      });
-
-      const timeoutPromise = new Promise<{ text?: string }>((resolve) => {
-        setTimeout(() => {
-          resolve({
-            text: "Based on senior marketing analysis: when growth plateaus, we first isolate whether it's an acquisition constraint (top-of-funnel saturation/CAC spike), conversion leak (landing page/onboarding friction), or retention decay (net revenue churn). What does your current cohort retention curve look like?",
-          });
-        }, 12000);
-      });
-
-      const response = await Promise.race([generatePromise, timeoutPromise]);
-      const responseText = response.text || "I'm here to help with your marketing strategy.";
-      return res.json({
-        answer: responseText,
-        content: responseText,
-      });
-    }
+    if (isSSE) return sendSSEText(res, responseText);
+    return res.json({ answer: responseText, content: responseText });
   } catch (error: any) {
     console.error("[api/chat] Error handling chat:", error);
     return res.status(500).json({
