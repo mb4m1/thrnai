@@ -1,3 +1,9 @@
+import {
+  runWorkersAIBinding,
+  type WorkersAIBinding,
+  type WorkersAITurn,
+} from "./workersAI";
+
 export interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
@@ -8,7 +14,7 @@ export interface ExecutionContext {
 }
 
 export interface Env {
-  GEMINI_API_KEY?: string;
+  AI?: WorkersAIBinding;
   AUTH_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
@@ -193,7 +199,7 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHAT HANDLER (Gemini AI Engine)
+// CHAT HANDLER (Cloudflare Workers AI — GPT-OSS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleChat(request: Request, env: Env): Promise<Response> {
@@ -246,73 +252,22 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 
     const systemPrompt = `${THRN_IDENTITY}\n${modeInstruction}\n${customSystem}`.trim();
 
-    const contents = validMessages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: getMessageText(m) }],
+    const turns: WorkersAITurn[] = validMessages.map((m) => ({
+      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: getMessageText(m),
     }));
 
-    if (contents.length === 0 && latestUserText) {
-      contents.push({ role: "user", parts: [{ text: latestUserText }] });
+    if (turns.length === 0 && latestUserText) {
+      turns.push({ role: "user", content: latestUserText });
     }
 
-    const apiKey = (env.GEMINI_API_KEY as string) || "";
+    const ai = env.AI as WorkersAIBinding | undefined;
+    const answer = ai ? await runWorkersAIBinding(ai, systemPrompt, turns) : "";
 
-    if (!apiKey) {
-      const fallbackMsg =
-        mode === "audit"
-          ? "In AUDIT mode, we isolate your funnel bottlenecks: 1) What is your primary acquisition channel, 2) Where is the sharpest conversion drop-off, and 3) What is your current CAC vs. payback window?"
-          : mode === "plan"
-          ? "In PLAN mode, we structure actionable roadmaps: 1) What is your primary 30-day North Star metric, 2) What channels do you currently operate, and 3) What is your weekly execution bandwidth?"
-          : "To diagnose and scale your marketing: 1) What is your core positioning wedge against incumbents? 2) Who is your ideal customer profile (ICP)? 3) Which acquisition channels are showing early signal?";
-
-      return new Response(
-        JSON.stringify({
-          answer: fallbackMsg,
-          content: fallbackMsg,
-          notice: "GEMINI_API_KEY not configured. Running in advisory heuristic mode.",
-        }),
-        {
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
-      );
-    }
-
-    const payload = {
-      system_instruction: {
-        parts: [{ text: systemPrompt }],
-      },
-      contents,
-      generationConfig: {
-        temperature: 0.5,
-      },
-    };
-
-    // Try models in order: gemini-2.5-flash, gemini-1.5-flash, gemini-2.0-flash
-    const modelsToTry = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"];
-    let res: Response | null = null;
-    let lastErrorText = "";
-
-    for (const model of modelsToTry) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          break;
-        } else {
-          lastErrorText = await res.text().catch(() => "");
-        }
-      } catch (fetchErr) {
-        lastErrorText = String(fetchErr);
-      }
-    }
-
-    if (!res || !res.ok) {
-      console.error("[Cloudflare Worker /api/chat] Gemini API error:", lastErrorText);
-      const fallbackMsg = "THRN: Unable to connect with the AI engine at this moment. Please verify your GEMINI_API_KEY in Cloudflare environment variables.";
+    if (!answer) {
+      const fallbackMsg = ai
+        ? "THRN: The AI engine is temporarily unavailable. Please try again in a moment."
+        : "THRN: The Workers AI binding is not available in this environment. Deploy the Worker with the AI binding enabled.";
       return new Response(
         JSON.stringify({
           error: { code: "ai_error", message: fallbackMsg },
@@ -323,16 +278,10 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
       );
     }
 
-    const data = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const answer =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "THRN: Growth analysis completed. Let's define the next experiment in your funnel.";
-
     return new Response(JSON.stringify({ answer, content: answer }), {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
+
   } catch (err: unknown) {
     console.error("[Cloudflare Worker /api/chat] Handler error:", err);
     return new Response(

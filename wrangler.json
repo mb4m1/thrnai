@@ -2,6 +2,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "thrnai",
   "main": "src/worker.ts",
+  "ai": {
+    "binding": "AI"
+  },
+
   "compatibility_date": "2025-02-14",
   "compatibility_flags": [
     "nodejs_compat"

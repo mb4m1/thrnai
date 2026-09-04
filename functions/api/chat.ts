@@ -1,5 +1,11 @@
+import {
+  runWorkersAIBinding,
+  type WorkersAIBinding,
+  type WorkersAITurn,
+} from "../../src/workersAI";
+
 interface Env {
-  GEMINI_API_KEY?: string;
+  AI?: WorkersAIBinding;
   [key: string]: unknown;
 }
 
@@ -15,49 +21,25 @@ You are THRN, not ChatGPT or a generic assistant. Maintain a sharp, executive, s
 function textOf(message: ChatMessage): string {
   if (typeof message.content === "string") return message.content;
   if (Array.isArray(message.content)) {
-    return message.content.map((block) => typeof block?.text === "string" ? block.text : "").join("");
+    return message.content.map((block) => (typeof block?.text === "string" ? block.text : "")).join("");
   }
   return "";
 }
 
-function cleanKey(value: unknown): string {
-  if (typeof value !== "string") return "";
-  return value.trim().replace(/^['\"]|['\"]$/g, "");
-}
-
-function buildGeminiContents(messages: ChatMessage[]) {
-  // The THRN UI intentionally displays an initial assistant greeting. That
-  // greeting must NOT be sent as the first Gemini model turn.
+function buildTurns(messages: ChatMessage[]): WorkersAITurn[] {
   const source = messages
     .filter((m) => m && (m.role === "user" || m.role === "assistant"))
     .map((m) => ({
-      role: (m.role === "assistant" ? "model" : "user") as "user" | "model",
-      text: textOf(m).trim(),
+      role: (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+      content: textOf(m).trim(),
     }))
-    .filter((m) => m.text.length > 0);
+    .filter((m) => m.content.length > 0);
 
-  while (source.length && source[0].role === "model") source.shift();
+  // The UI shows an initial assistant greeting; it must not lead the conversation.
+  while (source.length && source[0].role === "assistant") source.shift();
+  while (source.length && source[source.length - 1].role === "assistant") source.pop();
 
-  // Gemini requires alternating user/model turns. Merge consecutive turns
-  // instead of sending invalid duplicate roles.
-  const merged: Array<{ role: "user" | "model"; text: string }> = [];
-  for (const item of source) {
-    const previous = merged[merged.length - 1];
-    if (previous && previous.role === item.role) {
-      previous.text += `\n\n${item.text}`;
-    } else {
-      merged.push({ ...item });
-    }
-  }
-
-  // A generateContent request must be driven by a user turn. If the UI has
-  // a trailing assistant message, remove it; it is not a new user prompt.
-  while (merged.length && merged[merged.length - 1].role === "model") merged.pop();
-
-  return merged.map((m) => ({
-    role: m.role,
-    parts: [{ text: m.text }],
-  }));
+  return source;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -68,28 +50,28 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     "Access-Control-Allow-Headers": "Content-Type, Accept",
   };
 
+  const json = (payload: Record<string, unknown>, status = 200) =>
+    new Response(JSON.stringify(payload), {
+      status,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
+
   try {
-    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-    const messages = Array.isArray(body.messages) ? body.messages as ChatMessage[] : [];
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const messages = Array.isArray(body.messages) ? (body.messages as ChatMessage[]) : [];
     const mode = typeof body.mode === "string" ? body.mode : "consult";
     const customSystem = typeof body.system === "string" ? body.system : "";
 
-    const contents = buildGeminiContents(messages);
-    const apiKey = cleanKey(env.GEMINI_API_KEY);
+    const turns = buildTurns(messages);
 
-    if (!apiKey) {
-      const message = "THRN: GEMINI_API_KEY is not available to this production function. Check the Cloudflare Production secret and redeploy.";
-      return new Response(JSON.stringify({ answer: message, content: message }), {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+    if (!turns.length) {
+      const message = "THRN: Please enter a marketing question to begin the consultation.";
+      return json({ answer: message, content: message });
     }
 
-    if (!contents.length || contents[contents.length - 1].role !== "user") {
-      const message = "THRN: Please enter a marketing question to begin the consultation.";
-      return new Response(JSON.stringify({ answer: message, content: message }), {
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+    if (!env.AI) {
+      const message = "THRN: The Workers AI binding is not available in this environment.";
+      return json({ error: { code: "ai_error", message }, answer: message, content: message });
     }
 
     let modeInstruction = "";
@@ -100,69 +82,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const systemPrompt = `${THRN_IDENTITY}${modeInstruction}\n${customSystem}`.trim();
-    const payload = {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-    };
+    const answer = await runWorkersAIBinding(env.AI, systemPrompt, turns);
 
-    // Keep Gemini 3.7 Flash as the primary THRN engine. If that model is
-    // temporarily unavailable, use the current stable Flash fallback.
-    const models = ["gemini-3.7-flash", "gemini-2.5-flash"];
-    let lastError = "";
+    if (answer) return json({ answer, content: answer });
 
-    for (const model of models) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": apiKey,
-            },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        if (!response.ok) {
-          lastError = `${response.status}: ${await response.text().catch(() => "")}`;
-          continue;
-        }
-
-        const data = await response.json() as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
-        const answer = data.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("").trim();
-
-        if (answer) {
-          return new Response(JSON.stringify({ answer, content: answer }), {
-            headers: { "Content-Type": "application/json", ...corsHeaders },
-          });
-        }
-
-        lastError = "Gemini returned no text candidate.";
-      } catch (error) {
-        lastError = String(error);
-      }
-    }
-
-    console.error("[THRN /api/chat] Gemini request failed:", lastError);
     const message = "THRN: The AI engine is temporarily unavailable. Please try again in a moment.";
-    return new Response(JSON.stringify({
-      error: { code: "ai_error", message },
-      answer: message,
-      content: message,
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
+    return json({ error: { code: "ai_error", message }, answer: message, content: message });
   } catch (error) {
     console.error("[THRN /api/chat] Execution error:", error);
     const message = "THRN: The AI engine encountered an unexpected issue. Please try again.";
-    return new Response(JSON.stringify({ error: { code: "ai_error", message }, answer: message, content: message }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
+    return json({ error: { code: "ai_error", message }, answer: message, content: message });
   }
 };
 
