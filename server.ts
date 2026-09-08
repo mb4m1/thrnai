@@ -3,6 +3,12 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { renderThrnDocument } from "./src/renderDocument.ts";
 import { runWorkersAIRest, type WorkersAITurn } from "./src/workersAI.ts";
+import {
+  RAZORPAY_PLANS,
+  createRazorpayOrder,
+  isPlanId,
+  verifyPaymentSignature,
+} from "./src/razorpay.ts";
 
 const app = express();
 const portArgIndex = process.argv.indexOf("--port");
