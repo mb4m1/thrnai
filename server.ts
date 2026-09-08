@@ -164,6 +164,51 @@ app.post("/api/contact", (req, res) => {
   return res.json({ ok: true, message: "Thank you for reaching out. We will get back to you within one business day." });
 });
 
+// ── RAZORPAY CHECKOUT ─────────────────────────────────────────────────────
+app.post("/api/razorpay/order", async (req, res) => {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) {
+    return res.status(503).json({ ok: false, error: "Payments are not configured yet." });
+  }
+  const plan = req.body?.plan;
+  if (!isPlanId(plan)) {
+    return res.status(400).json({ ok: false, error: "Unknown plan." });
+  }
+  try {
+    const order = await createRazorpayOrder(keyId, keySecret, RAZORPAY_PLANS[plan]);
+    return res.json({
+      ok: true,
+      keyId: order.keyId,
+      orderId: order.orderId,
+      amount: order.amount,
+      currency: order.currency,
+      planName: order.plan.name,
+    });
+  } catch (err: any) {
+    console.error("[razorpay] order failed:", err?.message || err);
+    return res.status(502).json({ ok: false, error: "Could not start checkout. Please try again." });
+  }
+});
+
+app.post("/api/razorpay/verify", async (req, res) => {
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body || {};
+  if (!keySecret || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    return res.status(400).json({ ok: false, error: "Missing payment details." });
+  }
+  const valid = await verifyPaymentSignature(
+    keySecret,
+    String(razorpay_order_id),
+    String(razorpay_payment_id),
+    String(razorpay_signature),
+  );
+  if (!valid) return res.status(400).json({ ok: false, error: "Payment could not be verified." });
+  console.log(`[razorpay] payment verified: ${razorpay_payment_id} plan=${plan}`);
+  return res.json({ ok: true, plan: isPlanId(plan) ? plan : null });
+});
+
+
 // Auth endpoints
 app.get("/auth/me", (req, res) => {
   res.json({ authenticated: false, user: null });
