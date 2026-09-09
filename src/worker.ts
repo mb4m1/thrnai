@@ -9,6 +9,20 @@ import {
   isPlanId,
   verifyPaymentSignature,
 } from "./razorpay";
+import {
+  fetchRazorpayPayment,
+  paymentRecordFromWebhook,
+  recordPayment,
+  verifyWebhookSignature,
+} from "./paymentsStore";
+
+function storeEnv(env: Record<string, unknown>) {
+  return {
+    url: typeof env.SUPABASE_URL === "string" ? env.SUPABASE_URL : undefined,
+    serviceKey:
+      typeof env.SUPABASE_SERVICE_ROLE_KEY === "string" ? env.SUPABASE_SERVICE_ROLE_KEY : undefined,
+  };
+}
 
 export interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
@@ -418,15 +432,70 @@ export default {
         });
       }
       const valid = await verifyPaymentSignature(keySecret, orderId, paymentId, signature);
+      if (!valid) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "Payment could not be verified." }),
+          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      let recorded = false;
+      if (isPlanId(body.plan)) {
+        const keyId = typeof env.RAZORPAY_KEY_ID === "string" ? env.RAZORPAY_KEY_ID : "";
+        const details = keyId ? await fetchRazorpayPayment(keyId, keySecret, paymentId) : null;
+        recorded = await recordPayment(storeEnv(env), {
+          plan: body.plan,
+          email: details?.email ?? null,
+          contact: details?.contact ?? null,
+          amount: details?.amount,
+          currency: details?.currency,
+          status: "paid",
+          razorpay_order_id: orderId,
+          razorpay_payment_id: paymentId,
+          source: "checkout",
+        });
+      }
       return new Response(
-        JSON.stringify(
-          valid
-            ? { ok: true, plan: isPlanId(body.plan) ? body.plan : null }
-            : { ok: false, error: "Payment could not be verified." }
-        ),
-        { status: valid ? 200 : 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ ok: true, plan: isPlanId(body.plan) ? body.plan : null, recorded }),
+        { headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
+
+    if (url.pathname === "/api/razorpay/webhook") {
+      const secret =
+        typeof env.RAZORPAY_WEBHOOK_SECRET === "string" ? env.RAZORPAY_WEBHOOK_SECRET : "";
+      if (!secret) {
+        return new Response(JSON.stringify({ ok: false, error: "Webhook not configured." }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+      const rawBody = await request.text();
+      const signature = request.headers.get("x-razorpay-signature") || "";
+      const valid = await verifyWebhookSignature(secret, rawBody, signature);
+      if (!valid) {
+        return new Response(JSON.stringify({ ok: false, error: "Invalid signature." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(rawBody);
+      } catch {
+        parsed = null;
+      }
+      const record = paymentRecordFromWebhook(parsed);
+      if (!record) {
+        return new Response(JSON.stringify({ ok: true, ignored: true }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+      const stored = await recordPayment(storeEnv(env), record);
+      return new Response(JSON.stringify({ ok: true, stored }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
 
 
     // 4. Auth endpoints

@@ -9,6 +9,12 @@ import {
   isPlanId,
   verifyPaymentSignature,
 } from "./src/razorpay.ts";
+import {
+  fetchRazorpayPayment,
+  paymentRecordFromWebhook,
+  recordPayment,
+  verifyWebhookSignature,
+} from "./src/paymentsStore.ts";
 
 const app = express();
 const portArgIndex = process.argv.indexOf("--port");
@@ -18,8 +24,19 @@ const PORT = Number(
     8080
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
+
+const supabaseStoreEnv = {
+  url: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+  serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+};
 
 function sendSSEText(res: any, text: string) {
   res.setHeader("Content-Type", "text/event-stream");
@@ -205,8 +222,51 @@ app.post("/api/razorpay/verify", async (req, res) => {
   );
   if (!valid) return res.status(400).json({ ok: false, error: "Payment could not be verified." });
   console.log(`[razorpay] payment verified: ${razorpay_payment_id} plan=${plan}`);
-  return res.json({ ok: true, plan: isPlanId(plan) ? plan : null });
+
+  let recorded = false;
+  if (isPlanId(plan)) {
+    const keyId = process.env.RAZORPAY_KEY_ID || "";
+    const details = keyId
+      ? await fetchRazorpayPayment(keyId, keySecret, String(razorpay_payment_id))
+      : null;
+    recorded = await recordPayment(supabaseStoreEnv, {
+      plan,
+      email: details?.email ?? null,
+      contact: details?.contact ?? null,
+      amount: details?.amount,
+      currency: details?.currency,
+      status: "paid",
+      razorpay_order_id: String(razorpay_order_id),
+      razorpay_payment_id: String(razorpay_payment_id),
+      source: "checkout",
+    });
+  }
+  return res.json({ ok: true, plan: isPlanId(plan) ? plan : null, recorded });
 });
+
+// Razorpay webhook — authoritative confirmation of payment status.
+app.post("/api/razorpay/webhook", async (req: any, res) => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || "";
+  const signature = String(req.headers["x-razorpay-signature"] || "");
+  const rawBody = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body || {});
+  if (!secret) return res.status(503).json({ ok: false, error: "Webhook not configured." });
+
+  const valid = await verifyWebhookSignature(secret, rawBody, signature);
+  if (!valid) {
+    console.warn("[razorpay] webhook signature rejected");
+    return res.status(400).json({ ok: false, error: "Invalid signature." });
+  }
+
+  const record = paymentRecordFromWebhook(req.body);
+  if (!record) return res.json({ ok: true, ignored: true });
+
+  const stored = await recordPayment(supabaseStoreEnv, record);
+  console.log(
+    `[razorpay] webhook ${req.body?.event} order=${record.razorpay_order_id} stored=${stored}`
+  );
+  return res.json({ ok: true, stored });
+});
+
 
 
 // Auth endpoints
