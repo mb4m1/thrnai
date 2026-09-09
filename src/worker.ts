@@ -9,6 +9,20 @@ import {
   isPlanId,
   verifyPaymentSignature,
 } from "./razorpay";
+import {
+  fetchRazorpayPayment,
+  paymentRecordFromWebhook,
+  recordPayment,
+  verifyWebhookSignature,
+} from "./paymentsStore";
+
+function storeEnv(env: Record<string, unknown>) {
+  return {
+    url: typeof env.SUPABASE_URL === "string" ? env.SUPABASE_URL : undefined,
+    serviceKey:
+      typeof env.SUPABASE_SERVICE_ROLE_KEY === "string" ? env.SUPABASE_SERVICE_ROLE_KEY : undefined,
+  };
+}
 
 export interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
