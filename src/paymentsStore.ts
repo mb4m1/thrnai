@@ -10,6 +10,7 @@ export interface PaymentRecord {
   status?: string;
   razorpay_order_id: string;
   razorpay_payment_id?: string | null;
+  razorpay_subscription_id?: string | null;
   source?: string;
 }
 
@@ -36,6 +37,7 @@ export async function recordPayment(env: StoreEnv, record: PaymentRecord): Promi
     status: record.status || "paid",
     razorpay_order_id: record.razorpay_order_id,
     razorpay_payment_id: record.razorpay_payment_id || null,
+    razorpay_subscription_id: record.razorpay_subscription_id || null,
     source: record.source || "checkout",
   };
 
@@ -122,6 +124,7 @@ export async function verifyWebhookSignature(
 interface WebhookPayment {
   id?: string;
   order_id?: string;
+  subscription_id?: string;
   email?: string;
   contact?: string;
   amount?: number;
@@ -151,6 +154,7 @@ export function paymentRecordFromWebhook(body: any): PaymentRecord | null {
     status,
     razorpay_order_id: entity.order_id,
     razorpay_payment_id: entity.id || null,
+    razorpay_subscription_id: entity.subscription_id || null,
     source: "webhook",
   };
 }
