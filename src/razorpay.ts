@@ -25,30 +25,33 @@ function basicAuth(keyId: string, keySecret: string): string {
   return Buffer.from(raw, "utf8").toString("base64");
 }
 
-export interface CreatedOrder {
-  orderId: string;
-  amount: number;
-  currency: string;
+export interface CreatedSubscription {
+  subscriptionId: string;
   keyId: string;
+  planId: string;
   plan: PlanDefinition;
 }
 
-export async function createRazorpayOrder(
+export async function createRazorpaySubscription(
   keyId: string,
   keySecret: string,
   plan: PlanDefinition,
+  planId: string,
   notes: Record<string, string> = {},
-): Promise<CreatedOrder> {
-  const res = await fetch("https://api.razorpay.com/v1/orders", {
+): Promise<CreatedSubscription> {
+  if (!planId) throw new Error(`Razorpay plan is not configured for ${plan.id}.`);
+
+  const res = await fetch("https://api.razorpay.com/v1/subscriptions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Basic ${basicAuth(keyId, keySecret)}`,
     },
     body: JSON.stringify({
-      amount: plan.amount,
-      currency: plan.currency,
-      receipt: `thrn_${plan.id}_${Date.now()}`,
+      plan_id: planId,
+      total_count: 1200,
+      quantity: 1,
+      customer_notify: true,
       notes: { plan: plan.id, ...notes },
     }),
   });
@@ -57,15 +60,14 @@ export async function createRazorpayOrder(
   if (!res.ok || typeof data.id !== "string") {
     const detail =
       (data as { error?: { description?: string } }).error?.description ||
-      `Razorpay order creation failed (${res.status})`;
+      `Razorpay subscription creation failed (${res.status})`;
     throw new Error(detail);
   }
 
   return {
-    orderId: data.id,
-    amount: typeof data.amount === "number" ? data.amount : plan.amount,
-    currency: typeof data.currency === "string" ? data.currency : plan.currency,
+    subscriptionId: data.id,
     keyId,
+    planId,
     plan,
   };
 }
@@ -92,6 +94,19 @@ export async function verifyPaymentSignature(
   signature: string,
 ): Promise<boolean> {
   const expected = await hmacSha256Hex(keySecret, `${orderId}|${paymentId}`);
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
+}
+
+export async function verifySubscriptionSignature(
+  keySecret: string,
+  paymentId: string,
+  subscriptionId: string,
+  signature: string,
+): Promise<boolean> {
+  const expected = await hmacSha256Hex(keySecret, `${paymentId}|${subscriptionId}`);
   if (expected.length !== signature.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
