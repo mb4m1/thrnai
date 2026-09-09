@@ -18,8 +18,19 @@ const PORT = Number(
     8080
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
+
+const supabaseStoreEnv = {
+  url: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+  serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+};
 
 function sendSSEText(res: any, text: string) {
   res.setHeader("Content-Type", "text/event-stream");
