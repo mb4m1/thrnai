@@ -25,6 +25,7 @@ export type Database = {
           plan: string
           razorpay_order_id: string
           razorpay_payment_id: string | null
+          razorpay_subscription_id: string | null
           source: string
           status: string
           updated_at: string
@@ -39,6 +40,8 @@ export type Database = {
           plan: string
           razorpay_order_id: string
           razorpay_payment_id?: string | null
+          razorpay_subscription_id?: string | null
+          razorpay_subscription_id?: string | null
           source?: string
           status?: string
           updated_at?: string
