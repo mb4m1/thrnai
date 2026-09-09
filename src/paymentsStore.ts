@@ -71,7 +71,7 @@ export async function fetchRazorpayPayment(
   keyId: string,
   keySecret: string,
   paymentId: string,
-): Promise<{ email?: string; contact?: string; amount?: number; currency?: string } | null> {
+): Promise<{ email?: string; contact?: string; amount?: number; currency?: string; order_id?: string } | null> {
   const raw = `${keyId}:${keySecret}`;
   const auth =
     typeof btoa === "function" ? btoa(raw) : Buffer.from(raw, "utf8").toString("base64");
@@ -86,6 +86,7 @@ export async function fetchRazorpayPayment(
       contact: typeof data.contact === "string" ? data.contact : undefined,
       amount: typeof data.amount === "number" ? data.amount : undefined,
       currency: typeof data.currency === "string" ? data.currency : undefined,
+      order_id: typeof data.order_id === "string" ? data.order_id : undefined,
     };
   } catch {
     return null;
