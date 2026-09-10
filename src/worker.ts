@@ -5,9 +5,9 @@ import {
 } from "./workersAI";
 import {
   RAZORPAY_PLANS,
-  createRazorpayOrder,
+  createRazorpaySubscription,
   isPlanId,
-  verifyPaymentSignature,
+  verifySubscriptionSignature,
 } from "./razorpay";
 import {
   fetchRazorpayPayment,
@@ -380,63 +380,69 @@ export default {
       return handleContact(request);
     }
 
-    // 3b. Razorpay checkout
+    // 3b. Razorpay subscriptions
     if (url.pathname === "/api/razorpay/order") {
       const keyId = typeof env.RAZORPAY_KEY_ID === "string" ? env.RAZORPAY_KEY_ID : "";
       const keySecret = typeof env.RAZORPAY_KEY_SECRET === "string" ? env.RAZORPAY_KEY_SECRET : "";
+      const proPlanId = typeof env.RAZORPAY_PRO_PLAN_ID === "string" ? env.RAZORPAY_PRO_PLAN_ID : "";
+      const businessPlanId = typeof env.RAZORPAY_BUSINESS_PLAN_ID === "string" ? env.RAZORPAY_BUSINESS_PLAN_ID : "";
       if (!keyId || !keySecret) {
         return new Response(JSON.stringify({ ok: false, error: "Payments are not configured yet." }), {
-          status: 503,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 503, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
       const body = (await request.json().catch(() => ({}))) as { plan?: unknown };
       if (!isPlanId(body.plan)) {
         return new Response(JSON.stringify({ ok: false, error: "Unknown plan." }), {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+      const planId = body.plan === "pro" ? proPlanId : businessPlanId;
+      if (!planId) {
+        return new Response(JSON.stringify({ ok: false, error: `Razorpay ${body.plan} subscription plan is not configured yet.` }), {
+          status: 503, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
       try {
-        const order = await createRazorpayOrder(keyId, keySecret, RAZORPAY_PLANS[body.plan]);
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            keyId: order.keyId,
-            orderId: order.orderId,
-            amount: order.amount,
-            currency: order.currency,
-            planName: order.plan.name,
-          }),
-          { headers: { "Content-Type": "application/json", ...corsHeaders } }
+        const subscription = await createRazorpaySubscription(
+          keyId,
+          keySecret,
+          RAZORPAY_PLANS[body.plan],
+          planId,
+          { plan: body.plan },
         );
+        return new Response(JSON.stringify({
+          ok: true,
+          keyId: subscription.keyId,
+          subscriptionId: subscription.subscriptionId,
+          plan: body.plan,
+          planName: subscription.plan.name,
+        }), { headers: { "Content-Type": "application/json", ...corsHeaders } });
       } catch (err) {
-        console.error("[Worker] Razorpay order error:", err);
-        return new Response(
-          JSON.stringify({ ok: false, error: "Could not start checkout. Please try again." }),
-          { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+        console.error("[Worker] Razorpay subscription error:", err);
+        return new Response(JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : "Could not start checkout. Please try again.",
+        }), { status: 502, headers: { "Content-Type": "application/json", ...corsHeaders } });
       }
     }
 
     if (url.pathname === "/api/razorpay/verify") {
       const keySecret = typeof env.RAZORPAY_KEY_SECRET === "string" ? env.RAZORPAY_KEY_SECRET : "";
       const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-      const orderId = String(body.razorpay_order_id || "");
       const paymentId = String(body.razorpay_payment_id || "");
+      const subscriptionId = String(body.razorpay_subscription_id || "");
       const signature = String(body.razorpay_signature || "");
-      if (!keySecret || !orderId || !paymentId || !signature) {
-        return new Response(JSON.stringify({ ok: false, error: "Missing payment details." }), {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
+      if (!keySecret || !paymentId || !subscriptionId || !signature) {
+        return new Response(JSON.stringify({ ok: false, error: "Missing subscription payment details." }), {
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
-      const valid = await verifyPaymentSignature(keySecret, orderId, paymentId, signature);
+      const valid = await verifySubscriptionSignature(keySecret, paymentId, subscriptionId, signature);
       if (!valid) {
-        return new Response(
-          JSON.stringify({ ok: false, error: "Payment could not be verified." }),
-          { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-        );
+        return new Response(JSON.stringify({ ok: false, error: "Payment could not be verified." }), {
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
       }
       let recorded = false;
       if (isPlanId(body.plan)) {
@@ -449,24 +455,22 @@ export default {
           amount: details?.amount,
           currency: details?.currency,
           status: "paid",
-          razorpay_order_id: orderId,
+          razorpay_order_id: details?.order_id || `subscription:${subscriptionId}`,
           razorpay_payment_id: paymentId,
+          razorpay_subscription_id: subscriptionId,
           source: "checkout",
         });
       }
-      return new Response(
-        JSON.stringify({ ok: true, plan: isPlanId(body.plan) ? body.plan : null, recorded }),
-        { headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+      return new Response(JSON.stringify({ ok: true, plan: isPlanId(body.plan) ? body.plan : null, recorded }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     if (url.pathname === "/api/razorpay/webhook") {
-      const secret =
-        typeof env.RAZORPAY_WEBHOOK_SECRET === "string" ? env.RAZORPAY_WEBHOOK_SECRET : "";
+      const secret = typeof env.RAZORPAY_WEBHOOK_SECRET === "string" ? env.RAZORPAY_WEBHOOK_SECRET : "";
       if (!secret) {
         return new Response(JSON.stringify({ ok: false, error: "Webhook not configured." }), {
-          status: 503,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 503, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
       const rawBody = await request.text();
@@ -474,28 +478,20 @@ export default {
       const valid = await verifyWebhookSignature(secret, rawBody, signature);
       if (!valid) {
         return new Response(JSON.stringify({ ok: false, error: "Invalid signature." }), {
-          status: 400,
-          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400, headers: { "Content-Type": "application/json", ...corsHeaders },
         });
       }
       let parsed: unknown = null;
-      try {
-        parsed = JSON.parse(rawBody);
-      } catch {
-        parsed = null;
-      }
+      try { parsed = JSON.parse(rawBody); } catch { parsed = null; }
       const record = paymentRecordFromWebhook(parsed);
-      if (!record) {
-        return new Response(JSON.stringify({ ok: true, ignored: true }), {
-          headers: { "Content-Type": "application/json", ...corsHeaders },
-        });
-      }
+      if (!record) return new Response(JSON.stringify({ ok: true, ignored: true }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
       const stored = await recordPayment(storeEnv(env), record);
       return new Response(JSON.stringify({ ok: true, stored }), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
-
 
 
     // 4. Auth endpoints

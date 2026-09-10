@@ -8,6 +8,7 @@ CREATE TABLE public.payments (
   status TEXT NOT NULL DEFAULT 'paid',
   razorpay_order_id TEXT NOT NULL UNIQUE,
   razorpay_payment_id TEXT,
+  razorpay_subscription_id TEXT,
   source TEXT NOT NULL DEFAULT 'checkout',
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()

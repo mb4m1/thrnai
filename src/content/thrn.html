@@ -97,17 +97,18 @@ footer{border-top:1px solid var(--border);padding:30px 40px;display:flex;align-i
       const label=btn.textContent;btn.disabled=true;btn.textContent='Opening checkout\u2026';
       try{
         const r=await fetch('/api/razorpay/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan:plan})});
-        const d=await r.json();
-        if(!r.ok||!d.ok) throw new Error(d.error||'Checkout unavailable');
+        const contentType=r.headers.get('content-type')||'';
+        const d=contentType.includes('application/json') ? await r.json() : {};
+        if(!r.ok||!d.ok) throw new Error(d.error||`Checkout unavailable (HTTP ${r.status})`);
         if(typeof Razorpay!=='function') throw new Error('Checkout unavailable');
         const rzp=new Razorpay({
-          key:d.keyId,amount:d.amount,currency:d.currency,order_id:d.orderId,
+          key:d.keyId,subscription_id:d.subscriptionId,
           name:'THRN',description:d.planName+' \u2014 '+PRICE[plan],theme:{color:'#7C9E7A'},
           handler:async function(resp){
             btn.textContent='Confirming\u2026';
             try{
               const v=await fetch('/api/razorpay/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({plan:plan},resp))});
-              const vd=await v.json();
+              const vd=(v.headers.get('content-type')||'').includes('application/json') ? await v.json() : {};
               btn.textContent=(v.ok&&vd.ok)?'Payment received \u2713':'Verification failed';
             }catch(e){btn.textContent='Verification failed'}
             btn.disabled=true;

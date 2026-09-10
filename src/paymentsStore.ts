@@ -10,6 +10,7 @@ export interface PaymentRecord {
   status?: string;
   razorpay_order_id: string;
   razorpay_payment_id?: string | null;
+  razorpay_subscription_id?: string | null;
   source?: string;
 }
 
@@ -36,6 +37,7 @@ export async function recordPayment(env: StoreEnv, record: PaymentRecord): Promi
     status: record.status || "paid",
     razorpay_order_id: record.razorpay_order_id,
     razorpay_payment_id: record.razorpay_payment_id || null,
+    razorpay_subscription_id: record.razorpay_subscription_id || null,
     source: record.source || "checkout",
   };
 
@@ -69,7 +71,7 @@ export async function fetchRazorpayPayment(
   keyId: string,
   keySecret: string,
   paymentId: string,
-): Promise<{ email?: string; contact?: string; amount?: number; currency?: string } | null> {
+): Promise<{ email?: string; contact?: string; amount?: number; currency?: string; order_id?: string } | null> {
   const raw = `${keyId}:${keySecret}`;
   const auth =
     typeof btoa === "function" ? btoa(raw) : Buffer.from(raw, "utf8").toString("base64");
@@ -84,6 +86,7 @@ export async function fetchRazorpayPayment(
       contact: typeof data.contact === "string" ? data.contact : undefined,
       amount: typeof data.amount === "number" ? data.amount : undefined,
       currency: typeof data.currency === "string" ? data.currency : undefined,
+      order_id: typeof data.order_id === "string" ? data.order_id : undefined,
     };
   } catch {
     return null;
@@ -122,6 +125,7 @@ export async function verifyWebhookSignature(
 interface WebhookPayment {
   id?: string;
   order_id?: string;
+  subscription_id?: string;
   email?: string;
   contact?: string;
   amount?: number;
@@ -151,6 +155,7 @@ export function paymentRecordFromWebhook(body: any): PaymentRecord | null {
     status,
     razorpay_order_id: entity.order_id,
     razorpay_payment_id: entity.id || null,
+    razorpay_subscription_id: entity.subscription_id || null,
     source: "webhook",
   };
 }

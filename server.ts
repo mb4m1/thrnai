@@ -5,9 +5,9 @@ import { renderThrnDocument } from "./src/renderDocument.ts";
 import { runWorkersAIRest, type WorkersAITurn } from "./src/workersAI.ts";
 import {
   RAZORPAY_PLANS,
-  createRazorpayOrder,
+  createRazorpaySubscription,
   isPlanId,
-  verifyPaymentSignature,
+  verifySubscriptionSignature,
 } from "./src/razorpay.ts";
 import {
   fetchRazorpayPayment,
@@ -181,54 +181,38 @@ app.post("/api/contact", (req, res) => {
   return res.json({ ok: true, message: "Thank you for reaching out. We will get back to you within one business day." });
 });
 
-// ── RAZORPAY CHECKOUT ─────────────────────────────────────────────────────
+// ── RAZORPAY SUBSCRIPTIONS ───────────────────────────────────────────────
 app.post("/api/razorpay/order", async (req, res) => {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keyId || !keySecret) {
-    return res.status(503).json({ ok: false, error: "Payments are not configured yet." });
-  }
+  const proPlanId = process.env.RAZORPAY_PRO_PLAN_ID || "";
+  const businessPlanId = process.env.RAZORPAY_BUSINESS_PLAN_ID || "";
+  if (!keyId || !keySecret) return res.status(503).json({ ok: false, error: "Payments are not configured yet." });
   const plan = req.body?.plan;
-  if (!isPlanId(plan)) {
-    return res.status(400).json({ ok: false, error: "Unknown plan." });
-  }
+  if (!isPlanId(plan)) return res.status(400).json({ ok: false, error: "Unknown plan." });
+  const planId = plan === "pro" ? proPlanId : businessPlanId;
+  if (!planId) return res.status(503).json({ ok: false, error: `Razorpay ${plan} subscription plan is not configured yet.` });
   try {
-    const order = await createRazorpayOrder(keyId, keySecret, RAZORPAY_PLANS[plan]);
-    return res.json({
-      ok: true,
-      keyId: order.keyId,
-      orderId: order.orderId,
-      amount: order.amount,
-      currency: order.currency,
-      planName: order.plan.name,
-    });
+    const subscription = await createRazorpaySubscription(keyId, keySecret, RAZORPAY_PLANS[plan], planId, { plan });
+    return res.json({ ok: true, keyId: subscription.keyId, subscriptionId: subscription.subscriptionId, plan, planName: subscription.plan.name });
   } catch (err: any) {
-    console.error("[razorpay] order failed:", err?.message || err);
-    return res.status(502).json({ ok: false, error: "Could not start checkout. Please try again." });
+    console.error("[razorpay] subscription failed:", err?.message || err);
+    return res.status(502).json({ ok: false, error: err?.message || "Could not start checkout. Please try again." });
   }
 });
 
 app.post("/api/razorpay/verify", async (req, res) => {
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan } = req.body || {};
-  if (!keySecret || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ ok: false, error: "Missing payment details." });
+  const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature, plan } = req.body || {};
+  if (!keySecret || !razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+    return res.status(400).json({ ok: false, error: "Missing subscription payment details." });
   }
-  const valid = await verifyPaymentSignature(
-    keySecret,
-    String(razorpay_order_id),
-    String(razorpay_payment_id),
-    String(razorpay_signature),
-  );
+  const valid = await verifySubscriptionSignature(keySecret, String(razorpay_payment_id), String(razorpay_subscription_id), String(razorpay_signature));
   if (!valid) return res.status(400).json({ ok: false, error: "Payment could not be verified." });
-  console.log(`[razorpay] payment verified: ${razorpay_payment_id} plan=${plan}`);
-
   let recorded = false;
   if (isPlanId(plan)) {
     const keyId = process.env.RAZORPAY_KEY_ID || "";
-    const details = keyId
-      ? await fetchRazorpayPayment(keyId, keySecret, String(razorpay_payment_id))
-      : null;
+    const details = keyId ? await fetchRazorpayPayment(keyId, keySecret, String(razorpay_payment_id)) : null;
     recorded = await recordPayment(supabaseStoreEnv, {
       plan,
       email: details?.email ?? null,
@@ -236,8 +220,9 @@ app.post("/api/razorpay/verify", async (req, res) => {
       amount: details?.amount,
       currency: details?.currency,
       status: "paid",
-      razorpay_order_id: String(razorpay_order_id),
+      razorpay_order_id: details?.order_id || `subscription:${razorpay_subscription_id}`,
       razorpay_payment_id: String(razorpay_payment_id),
+      razorpay_subscription_id: String(razorpay_subscription_id),
       source: "checkout",
     });
   }
@@ -250,23 +235,14 @@ app.post("/api/razorpay/webhook", async (req: any, res) => {
   const signature = String(req.headers["x-razorpay-signature"] || "");
   const rawBody = typeof req.rawBody === "string" ? req.rawBody : JSON.stringify(req.body || {});
   if (!secret) return res.status(503).json({ ok: false, error: "Webhook not configured." });
-
   const valid = await verifyWebhookSignature(secret, rawBody, signature);
-  if (!valid) {
-    console.warn("[razorpay] webhook signature rejected");
-    return res.status(400).json({ ok: false, error: "Invalid signature." });
-  }
-
+  if (!valid) return res.status(400).json({ ok: false, error: "Invalid signature." });
   const record = paymentRecordFromWebhook(req.body);
   if (!record) return res.json({ ok: true, ignored: true });
-
   const stored = await recordPayment(supabaseStoreEnv, record);
-  console.log(
-    `[razorpay] webhook ${req.body?.event} order=${record.razorpay_order_id} stored=${stored}`
-  );
+  console.log(`[razorpay] webhook ${req.body?.event} order=${record.razorpay_order_id} stored=${stored}`);
   return res.json({ ok: true, stored });
 });
-
 
 
 // Auth endpoints
