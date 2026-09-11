@@ -1,5 +1,6 @@
-// THRN AI engine — Cloudflare Workers AI (GPT-OSS).
-// This is the ONLY AI backend for THRN. No Gemini / Claude / OpenAI direct APIs.
+// THRN AI engine — Cloudflare Workers AI.
+// GPT-OSS remains the default engine. An optional LoRA can be enabled only when
+// a compatible fine-tune has been trained and uploaded to Workers AI.
 
 export const WORKERS_AI_MODEL = "@cf/openai/gpt-oss-120b";
 export const WORKERS_AI_FALLBACK_MODEL = "@cf/openai/gpt-oss-20b";
@@ -11,6 +12,13 @@ export interface WorkersAITurn {
 
 export interface WorkersAIBinding {
   run(model: string, input: Record<string, unknown>): Promise<unknown>;
+}
+
+export interface WorkersAILoRAOptions {
+  /** Workers AI fine-tune name or id. */
+  lora?: string;
+  /** LoRA-compatible Workers AI model, e.g. a model ending in -lora. */
+  loraModel?: string;
 }
 
 /** Workers AI responses come back in a few shapes depending on model family. */
@@ -56,13 +64,28 @@ function buildInput(system: string, messages: WorkersAITurn[]) {
   };
 }
 
-/** Run GPT-OSS through the Workers AI binding (production Worker / Pages Function). */
+/** Run Workers AI with an optional THRN LoRA. The LoRA path is opt-in. */
 export async function runWorkersAIBinding(
   ai: WorkersAIBinding,
   system: string,
-  messages: WorkersAITurn[]
+  messages: WorkersAITurn[],
+  options: WorkersAILoRAOptions = {}
 ): Promise<string> {
   const input = buildInput(system, messages);
+
+  // Only attempt a LoRA when explicitly configured. If it fails, fall back to
+  // the existing production GPT-OSS path instead of breaking chat.
+  if (options.lora && options.loraModel) {
+    try {
+      const text = extractWorkersAIText(
+        await ai.run(options.loraModel, { ...input, lora: options.lora })
+      );
+      if (text) return text;
+    } catch (error) {
+      console.error(`[THRN Workers AI LoRA] ${options.loraModel} failed:`, error);
+    }
+  }
+
   for (const model of [WORKERS_AI_MODEL, WORKERS_AI_FALLBACK_MODEL]) {
     try {
       const text = extractWorkersAIText(await ai.run(model, input));
@@ -75,7 +98,7 @@ export async function runWorkersAIBinding(
 }
 
 /**
- * Run GPT-OSS through the Cloudflare Workers AI REST API.
+ * Run Workers AI through the Cloudflare Workers AI REST API.
  * Used by the local dev server, which has no Workers AI binding.
  * Credentials are Cloudflare-native (account id + API token), not an AI vendor key.
  */
