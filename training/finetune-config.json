@@ -1,0 +1,14 @@
+{
+  "project": "thrn-aio-aeo",
+  "dataset": "training/thrn-training.csv",
+  "recommended_base_model": "@cf/meta/llama-3.2-11b-vision-instruct",
+  "model_type": "llama",
+  "lora_rank": 8,
+  "quantization": "none",
+  "notes": [
+    "Use the Cloudflare Workers AI AutoTrain workflow to produce the LoRA adapter.",
+    "The recommended base model is currently listed by Cloudflare as LoRA-capable.",
+    "Do not activate the adapter in production until it passes the THRN evaluation set.",
+    "After training, upload adapter_config.json and adapter_model.safetensors as a Workers AI fine-tune."
+  ]
+}
