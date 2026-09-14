@@ -27,15 +27,16 @@ function paymentScript(nonce = ""): string {
   };
 
   const currencyFromButton = (btn) => {
-    const explicit = btn.dataset.currency;
-    if (explicit === 'USD' || explicit === 'INR') return explicit;
+    const activeCurrency = document.querySelector('.currency-btn.active')?.dataset.currency;
+    if (activeCurrency === 'USD' || activeCurrency === 'INR') return activeCurrency;
 
-    // The button text is only "Choose Pro/Business". Read the price shown in its own card.
     const card = btn.closest('.price-card');
     const price = card?.querySelector('.price-value');
-    const priceText = (price?.textContent || '').replace(/\\s+/g, '');
-    if (priceText.includes('₹')) return 'INR';
-    if (priceText.includes('$')) return 'USD';
+    const dataUsd = price?.getAttribute('data-usd');
+    const dataInr = price?.getAttribute('data-inr');
+    const visiblePrice = (price?.textContent || '').trim();
+    if (visiblePrice.includes('₹') || dataInr === visiblePrice) return 'INR';
+    if (visiblePrice.includes('$') || dataUsd === visiblePrice) return 'USD';
 
     return getStoredCurrency();
   };
@@ -127,9 +128,13 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
   const plan = RAZORPAY_PLANS[body.plan];
   const planId = currency === "USD"
     ? envString(env, body.plan === "pro" ? "RAZORPAY_PRO_USD_PLAN_ID" : "RAZORPAY_BUSINESS_USD_PLAN_ID")
+    : envString(env, body.plan === "INR" ? "" : "RAZORPAY_PRO_PLAN_ID");
+
+  const resolvedPlanId = currency === "USD"
+    ? envString(env, body.plan === "pro" ? "RAZORPAY_PRO_USD_PLAN_ID" : "RAZORPAY_BUSINESS_USD_PLAN_ID")
     : envString(env, body.plan === "pro" ? "RAZORPAY_PRO_PLAN_ID" : "RAZORPAY_BUSINESS_PLAN_ID");
 
-  if (!planId) {
+  if (!resolvedPlanId) {
     return new Response(JSON.stringify({ ok: false, error: `Razorpay ${body.plan} ${currency} subscription plan is not configured yet.` }), {
       status: 503,
       headers: { "Content-Type": "application/json" },
@@ -137,7 +142,7 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
   }
 
   try {
-    const subscription = await createRazorpaySubscription(keyId, keySecret, plan, planId, {
+    const subscription = await createRazorpaySubscription(keyId, keySecret, plan, resolvedPlanId, {
       plan: body.plan,
       currency,
     });
@@ -175,7 +180,7 @@ export default {
       headers.delete("Content-Length");
       headers.delete("Content-Encoding");
       headers.delete("ETag");
-      const nonceMatch = html.match(/<script\\s+nonce="([^"]+)"/i);
+      const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
       return new Response(html.replace("</body>", `${paymentScript(nonce)}</body>`), {
         status: response.status,
