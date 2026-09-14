@@ -150,7 +150,7 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
 }
 
 export default {
-  async fetch(request: Request, env: Record<string, unknown>, ctx: any): Promise<Response> {
+  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/razorpay/order" && request.method === "POST") {
@@ -163,6 +163,8 @@ export default {
       const html = await response.text();
       const headers = new Headers(response.headers);
       headers.delete("Content-Length");
+      headers.delete("Content-Encoding");
+      headers.delete("ETag");
       const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
       return new Response(html.replace("</body>", `${paymentScript(nonce)}</body>`), {
