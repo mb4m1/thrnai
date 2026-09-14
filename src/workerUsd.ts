@@ -29,9 +29,14 @@ function paymentScript(nonce = ""): string {
   const currencyFromButton = (btn) => {
     const explicit = btn.dataset.currency;
     if (explicit === 'USD' || explicit === 'INR') return explicit;
-    const label = (btn.textContent || '').replace(/\s+/g, '');
-    if (label.includes('₹')) return 'INR';
-    if (label.includes('$')) return 'USD';
+
+    // The button text is only "Choose Pro/Business". Read the price shown in its own card.
+    const card = btn.closest('.price-card');
+    const price = card?.querySelector('.price-value');
+    const priceText = (price?.textContent || '').replace(/\\s+/g, '');
+    if (priceText.includes('₹')) return 'INR';
+    if (priceText.includes('$')) return 'USD';
+
     return getStoredCurrency();
   };
 
@@ -170,7 +175,7 @@ export default {
       headers.delete("Content-Length");
       headers.delete("Content-Encoding");
       headers.delete("ETag");
-      const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
+      const nonceMatch = html.match(/<script\\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
       return new Response(html.replace("</body>", `${paymentScript(nonce)}</body>`), {
         status: response.status,
