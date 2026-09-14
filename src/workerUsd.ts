@@ -27,15 +27,18 @@ function paymentScript(nonce = ""): string {
   };
 
   const currencyFromButton = (btn) => {
-    const explicit = btn.dataset.currency;
-    if (explicit === 'USD' || explicit === 'INR') return explicit;
+    // The visible pricing toggle is the source of truth. A stale localStorage value
+    // must never override the currency currently selected by the user.
+    const activeCurrency = document.querySelector('.currency-btn.active')?.dataset.currency;
+    if (activeCurrency === 'USD' || activeCurrency === 'INR') return activeCurrency;
 
-    // The button text is only "Choose Pro/Business". Read the price shown in its own card.
     const card = btn.closest('.price-card');
     const price = card?.querySelector('.price-value');
-    const priceText = (price?.textContent || '').replace(/\\s+/g, '');
-    if (priceText.includes('₹')) return 'INR';
-    if (priceText.includes('$')) return 'USD';
+    const dataUsd = price?.getAttribute('data-usd');
+    const dataInr = price?.getAttribute('data-inr');
+    const visiblePrice = (price?.textContent || '').trim();
+    if (visiblePrice.includes('₹') || dataInr === visiblePrice) return 'INR';
+    if (visiblePrice.includes('$') || dataUsd === visiblePrice) return 'USD';
 
     return getStoredCurrency();
   };
@@ -175,7 +178,7 @@ export default {
       headers.delete("Content-Length");
       headers.delete("Content-Encoding");
       headers.delete("ETag");
-      const nonceMatch = html.match(/<script\\s+nonce="([^"]+)"/i);
+      const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
       return new Response(html.replace("</body>", `${paymentScript(nonce)}</body>`), {
         status: response.status,
