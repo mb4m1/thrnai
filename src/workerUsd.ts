@@ -1,9 +1,5 @@
 import baseWorker from "./worker";
-import {
-  RAZORPAY_PLANS,
-  createRazorpaySubscription,
-  isPlanId,
-} from "./razorpay";
+import { RAZORPAY_PLANS, createRazorpaySubscription, isPlanId } from "./razorpay";
 
 function envString(env: Record<string, unknown>, key: string): string {
   return typeof env[key] === "string" ? String(env[key]) : "";
@@ -25,9 +21,18 @@ function paymentScript(nonce = ""): string {
   const originalButtons = document.querySelectorAll('.price-btn[data-plan]');
   if (!originalButtons.length) return;
 
-  const getCurrency = () => {
+  const getStoredCurrency = () => {
     const stored = localStorage.getItem('thrn-currency');
     return stored === 'USD' || stored === 'INR' ? stored : ((navigator.language || '').toLowerCase().startsWith('en-in') ? 'INR' : 'USD');
+  };
+
+  const currencyFromButton = (btn) => {
+    const explicit = btn.dataset.currency;
+    if (explicit === 'USD' || explicit === 'INR') return explicit;
+    const label = (btn.textContent || '').replace(/\\s+/g, '');
+    if (label.includes('₹')) return 'INR';
+    if (label.includes('$')) return 'USD';
+    return getStoredCurrency();
   };
 
   document.addEventListener('click', async (event) => {
@@ -40,7 +45,7 @@ function paymentScript(nonce = ""): string {
     const btn = target;
     const plan = btn.dataset.plan;
     if (plan !== 'pro' && plan !== 'business') return;
-    const currency = getCurrency();
+    const currency = currencyFromButton(btn);
     const label = btn.textContent || '';
     btn.disabled = true;
     btn.textContent = 'Opening checkout…';
@@ -67,7 +72,7 @@ function paymentScript(nonce = ""): string {
             const v = await fetch('/api/razorpay/verify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(Object.assign({ plan }, resp))
+              body: JSON.stringify(Object.assign({ plan, currency }, resp))
             });
             const vd = (v.headers.get('content-type') || '').includes('application/json') ? await v.json() : {};
             btn.textContent = (v.ok && vd.ok) ? 'Payment received ✓' : 'Verification failed';
@@ -165,7 +170,7 @@ export default {
       headers.delete("Content-Length");
       headers.delete("Content-Encoding");
       headers.delete("ETag");
-      const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
+      const nonceMatch = html.match(/<script\\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
       return new Response(html.replace("</body>", `${paymentScript(nonce)}</body>`), {
         status: response.status,
