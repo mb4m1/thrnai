@@ -2,7 +2,7 @@ import baseWorker from "./worker";
 import { RAZORPAY_PLANS, createRazorpaySubscription, isPlanId } from "./razorpay";
 
 function envString(env: Record<string, unknown>, key: string): string {
-  return typeof env[key] === "string" ? String(env[key]) : "";
+  return typeof env[key] === "string" ? String(env[key]).trim() : "";
 }
 
 function acceptsInternationalCurrency(request: Request): boolean {
@@ -107,6 +107,36 @@ function paymentScript(nonce = ""): string {
 </script>`;
 }
 
+function basicAuth(keyId: string, keySecret: string): string {
+  return btoa(`${keyId}:${keySecret}`);
+}
+
+async function fetchRazorpayPlanCurrency(
+  keyId: string,
+  keySecret: string,
+  planId: string,
+): Promise<string> {
+  const response = await fetch(`https://api.razorpay.com/v1/plans/${encodeURIComponent(planId)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Basic ${basicAuth(keyId, keySecret)}`,
+    },
+  });
+
+  const data = (await response.json().catch(() => ({}))) as {
+    item?: { currency?: unknown };
+    error?: { description?: string };
+  };
+
+  if (!response.ok) {
+    throw new Error(data.error?.description || `Could not verify Razorpay plan ${planId}.`);
+  }
+
+  const currency = typeof data.item?.currency === "string" ? data.item.currency : "";
+  if (!currency) throw new Error(`Razorpay plan ${planId} did not return a currency.`);
+  return currency;
+}
+
 async function handleRazorpayOrder(request: Request, env: Record<string, unknown>): Promise<Response> {
   const keyId = envString(env, "RAZORPAY_KEY_ID");
   const keySecret = envString(env, "RAZORPAY_KEY_SECRET");
@@ -140,6 +170,15 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
   }
 
   try {
+    // Verify the actual Razorpay plan currency before creating a subscription.
+    // This prevents an incorrectly mapped plan ID from silently opening the wrong checkout currency.
+    const actualCurrency = await fetchRazorpayPlanCurrency(keyId, keySecret, planId);
+    if (actualCurrency !== currency) {
+      throw new Error(
+        `Razorpay plan currency mismatch: requested ${currency}, but plan ${planId} is ${actualCurrency}. Check the Cloudflare plan ID variables.`,
+      );
+    }
+
     const subscription = await createRazorpaySubscription(keyId, keySecret, plan, planId, {
       plan: body.plan,
       currency,
