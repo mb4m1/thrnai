@@ -126,10 +126,6 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
   const requestedCurrency = body.currency === "USD" || body.currency === "INR" ? body.currency : null;
   const currency = requestedCurrency || (acceptsInternationalCurrency(request) ? "USD" : "INR");
   const plan = RAZORPAY_PLANS[body.plan];
-  const planId = currency === "USD"
-    ? envString(env, body.plan === "pro" ? "RAZORPAY_PRO_USD_PLAN_ID" : "RAZORPAY_BUSINESS_USD_PLAN_ID")
-    : envString(env, body.plan === "INR" ? "" : "RAZORPAY_PRO_PLAN_ID");
-
   const resolvedPlanId = currency === "USD"
     ? envString(env, body.plan === "pro" ? "RAZORPAY_PRO_USD_PLAN_ID" : "RAZORPAY_BUSINESS_USD_PLAN_ID")
     : envString(env, body.plan === "pro" ? "RAZORPAY_PRO_PLAN_ID" : "RAZORPAY_BUSINESS_PLAN_ID");
