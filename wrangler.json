@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "thrnai",
-  "main": "src/worker.ts",
+  "main": "src/workerUsd.ts",
   "ai": {
     "binding": "AI"
   },
