@@ -87,6 +87,15 @@ async function fetchRazorpayPlanCurrency(keyId: string, keySecret: string, planI
   return currency;
 }
 
+async function fetchRazorpaySubscriptionPlanId(keyId: string, keySecret: string, subscriptionId: string): Promise<string> {
+  const response = await fetch(`https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: "GET", headers: { Authorization: `Basic ${basicAuth(keyId, keySecret)}` } });
+  const data = (await response.json().catch(() => ({}))) as { plan_id?: unknown; error?: { description?: string } };
+  if (!response.ok) throw new Error(data.error?.description || `Could not verify Razorpay subscription ${subscriptionId}.`);
+  const planId = typeof data.plan_id === "string" ? data.plan_id.trim() : "";
+  if (!planId) throw new Error(`Razorpay subscription ${subscriptionId} did not return a plan_id.`);
+  return planId;
+}
+
 async function handleRazorpayOrder(request: Request, env: Record<string, unknown>, forcedCurrency?: "INR" | "USD"): Promise<Response> {
   const keyId = envString(env, "RAZORPAY_KEY_ID");
   const keySecret = envString(env, "RAZORPAY_KEY_SECRET");
@@ -102,10 +111,14 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
     const actualCurrency = await fetchRazorpayPlanCurrency(keyId, keySecret, planId);
     if (actualCurrency !== currency) throw new Error(`Razorpay plan currency mismatch: requested ${currency}, but plan ${planId} is ${actualCurrency}. Check the Cloudflare plan ID variables.`);
     const subscription = await createRazorpaySubscription(keyId, keySecret, plan, planId, { plan: body.plan, currency });
-    return new Response(JSON.stringify({ ok: true, keyId: subscription.keyId, subscriptionId: subscription.subscriptionId, plan: body.plan, planName: subscription.plan.name, currency, displayPrice: currency === "USD" ? USD_PRICES[body.plan] : INR_PRICES[body.plan] }), { headers: { "Content-Type": "application/json" } });
+    const createdSubscriptionPlanId = await fetchRazorpaySubscriptionPlanId(keyId, keySecret, subscription.subscriptionId);
+    if (createdSubscriptionPlanId !== planId) {
+      throw new Error(`Razorpay subscription plan mismatch: expected ${planId}, but subscription ${subscription.subscriptionId} uses ${createdSubscriptionPlanId}.`);
+    }
+    return new Response(JSON.stringify({ ok: true, keyId: subscription.keyId, subscriptionId: subscription.subscriptionId, plan: body.plan, planName: subscription.plan.name, currency, displayPrice: currency === "USD" ? USD_PRICES[body.plan] : INR_PRICES[body.plan], planId, verifiedPlanId: createdSubscriptionPlanId }), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("[Worker] Razorpay subscription error:", err);
-    return new Response(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : "Could not start checkout. Please try again." }), { status: 502, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : "Could not start checkout. Please try again." }), { status: 502, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
   }
 }
 
