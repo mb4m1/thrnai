@@ -18,17 +18,14 @@ const USD_PRICES: Record<string, string> = {
 function paymentScript(nonce = ""): string {
   return `<script nonce="${nonce}">
 (() => {
-  const originalButtons = document.querySelectorAll('.price-btn[data-plan]');
-  if (!originalButtons.length) return;
-
   const getStoredCurrency = () => {
     const stored = localStorage.getItem('thrn-currency');
     return stored === 'USD' || stored === 'INR' ? stored : ((navigator.language || '').toLowerCase().startsWith('en-in') ? 'INR' : 'USD');
   };
 
   const currencyFromButton = (btn) => {
-    // The price displayed on the exact card being clicked is the strongest source of truth.
-    // This prevents a stale currency-toggle class from overriding a visible ₹399 price.
+    // Read the actual displayed price on the clicked card first.
+    // This avoids stale toggle/localStorage state and is independent of listener ordering.
     const card = btn.closest('.price-card');
     const price = card?.querySelector('.price-value');
     const visiblePrice = (price?.textContent || '').trim();
@@ -46,6 +43,8 @@ function paymentScript(nonce = ""): string {
     return getStoredCurrency();
   };
 
+  // Register this listener as early as possible. The script is injected immediately
+  // after <body>, before the original pricing script, so it wins over the old handler.
   document.addEventListener('click', async (event) => {
     const target = event.target instanceof Element ? event.target.closest('.price-btn[data-plan]') : null;
     if (!target) return;
@@ -173,8 +172,6 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
   }
 
   try {
-    // Verify the actual Razorpay plan currency before creating a subscription.
-    // This prevents an incorrectly mapped plan ID from silently opening the wrong checkout currency.
     const actualCurrency = await fetchRazorpayPlanCurrency(keyId, keySecret, planId);
     if (actualCurrency !== currency) {
       throw new Error(
@@ -222,7 +219,8 @@ export default {
       headers.delete("ETag");
       const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
-      return new Response(html.replace("</body>", `${paymentScript(nonce)}</body>`), {
+      const injected = paymentScript(nonce);
+      return new Response(html.replace(/<body([^>]*)>/i, `<body$1>${injected}`), {
         status: response.status,
         statusText: response.statusText,
         headers,
