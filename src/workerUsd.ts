@@ -27,18 +27,21 @@ function paymentScript(nonce = ""): string {
   };
 
   const currencyFromButton = (btn) => {
-    // The visible pricing toggle is the source of truth. A stale localStorage value
-    // must never override the currency currently selected by the user.
-    const activeCurrency = document.querySelector('.currency-btn.active')?.dataset.currency;
-    if (activeCurrency === 'USD' || activeCurrency === 'INR') return activeCurrency;
-
+    // The price displayed on the exact card being clicked is the strongest source of truth.
+    // This prevents a stale currency-toggle class from overriding a visible ₹399 price.
     const card = btn.closest('.price-card');
     const price = card?.querySelector('.price-value');
+    const visiblePrice = (price?.textContent || '').trim();
+    if (visiblePrice.includes('₹')) return 'INR';
+    if (visiblePrice.includes('$')) return 'USD';
+
     const dataUsd = price?.getAttribute('data-usd');
     const dataInr = price?.getAttribute('data-inr');
-    const visiblePrice = (price?.textContent || '').trim();
-    if (visiblePrice.includes('₹') || dataInr === visiblePrice) return 'INR';
-    if (visiblePrice.includes('$') || dataUsd === visiblePrice) return 'USD';
+    if (dataInr === visiblePrice && dataInr) return 'INR';
+    if (dataUsd === visiblePrice && dataUsd) return 'USD';
+
+    const activeCurrency = document.querySelector('.currency-btn.active')?.dataset.currency;
+    if (activeCurrency === 'USD' || activeCurrency === 'INR') return activeCurrency;
 
     return getStoredCurrency();
   };
