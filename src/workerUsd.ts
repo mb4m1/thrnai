@@ -10,10 +10,8 @@ function acceptsInternationalCurrency(request: Request): boolean {
   return !language.includes("en-in") && !language.includes("hi-in") && !language.includes("mr-in");
 }
 
-const USD_PRICES: Record<string, string> = {
-  pro: "$5 / month",
-  business: "$15 / month",
-};
+const USD_PRICES: Record<string, string> = { pro: "$5 / month", business: "$15 / month" };
+const INR_PRICES: Record<string, string> = { pro: "₹399 / month", business: "₹1,199 / month" };
 
 function paymentScript(nonce = ""): string {
   return `<script nonce="${nonce}">
@@ -22,54 +20,34 @@ function paymentScript(nonce = ""): string {
     const stored = localStorage.getItem('thrn-currency');
     return stored === 'USD' || stored === 'INR' ? stored : ((navigator.language || '').toLowerCase().startsWith('en-in') ? 'INR' : 'USD');
   };
-
   const currencyFromButton = (btn) => {
-    // Read the actual displayed price on the clicked card first.
-    // This avoids stale toggle/localStorage state and is independent of listener ordering.
     const card = btn.closest('.price-card');
     const price = card?.querySelector('.price-value');
     const visiblePrice = (price?.textContent || '').trim();
     if (visiblePrice.includes('₹')) return 'INR';
     if (visiblePrice.includes('$')) return 'USD';
-
-    const dataUsd = price?.getAttribute('data-usd');
-    const dataInr = price?.getAttribute('data-inr');
-    if (dataInr === visiblePrice && dataInr) return 'INR';
-    if (dataUsd === visiblePrice && dataUsd) return 'USD';
-
-    const activeCurrency = document.querySelector('.currency-btn.active')?.dataset.currency;
+    const activeCurrency = document.querySelector('.currency-switcher .currency-btn.active')?.dataset.currency;
     if (activeCurrency === 'USD' || activeCurrency === 'INR') return activeCurrency;
-
     return getStoredCurrency();
   };
-
-  // Register this listener as early as possible. The script is injected immediately
-  // after <body>, before the original pricing script, so it wins over the old handler.
   document.addEventListener('click', async (event) => {
     const target = event.target instanceof Element ? event.target.closest('.price-btn[data-plan]') : null;
     if (!target) return;
-
     event.preventDefault();
     event.stopImmediatePropagation();
-
     const btn = target;
     const plan = btn.dataset.plan;
     if (plan !== 'pro' && plan !== 'business') return;
     const currency = currencyFromButton(btn);
+    const endpoint = currency === 'INR' ? '/api/razorpay/order/inr' : '/api/razorpay/order/usd';
     const label = btn.textContent || '';
     btn.disabled = true;
     btn.textContent = 'Opening checkout…';
-
     try {
-      const r = await fetch('/api/razorpay/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan, currency })
-      });
+      const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan }) });
       const d = (r.headers.get('content-type') || '').includes('application/json') ? await r.json() : {};
       if (!r.ok || !d.ok) throw new Error(d.error || 'Checkout unavailable');
       if (typeof Razorpay !== 'function') throw new Error('Checkout unavailable');
-
       const rzp = new Razorpay({
         key: d.keyId,
         subscription_id: d.subscriptionId,
@@ -79,24 +57,13 @@ function paymentScript(nonce = ""): string {
         handler: async function(resp) {
           btn.textContent = 'Confirming…';
           try {
-            const v = await fetch('/api/razorpay/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(Object.assign({ plan, currency }, resp))
-            });
+            const v = await fetch('/api/razorpay/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ plan, currency }, resp)) });
             const vd = (v.headers.get('content-type') || '').includes('application/json') ? await v.json() : {};
             btn.textContent = (v.ok && vd.ok) ? 'Payment received ✓' : 'Verification failed';
-          } catch {
-            btn.textContent = 'Verification failed';
-          }
+          } catch { btn.textContent = 'Verification failed'; }
           btn.disabled = true;
         },
-        modal: {
-          ondismiss: function() {
-            btn.disabled = false;
-            btn.textContent = label;
-          }
-        }
+        modal: { ondismiss: function() { btn.disabled = false; btn.textContent = label; } }
       });
       rzp.open();
     } catch (err) {
@@ -109,122 +76,55 @@ function paymentScript(nonce = ""): string {
 </script>`;
 }
 
-function basicAuth(keyId: string, keySecret: string): string {
-  return btoa(`${keyId}:${keySecret}`);
-}
+function basicAuth(keyId: string, keySecret: string): string { return btoa(`${keyId}:${keySecret}`); }
 
-async function fetchRazorpayPlanCurrency(
-  keyId: string,
-  keySecret: string,
-  planId: string,
-): Promise<string> {
-  const response = await fetch(`https://api.razorpay.com/v1/plans/${encodeURIComponent(planId)}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Basic ${basicAuth(keyId, keySecret)}`,
-    },
-  });
-
-  const data = (await response.json().catch(() => ({}))) as {
-    item?: { currency?: unknown };
-    error?: { description?: string };
-  };
-
-  if (!response.ok) {
-    throw new Error(data.error?.description || `Could not verify Razorpay plan ${planId}.`);
-  }
-
+async function fetchRazorpayPlanCurrency(keyId: string, keySecret: string, planId: string): Promise<string> {
+  const response = await fetch(`https://api.razorpay.com/v1/plans/${encodeURIComponent(planId)}`, { method: "GET", headers: { Authorization: `Basic ${basicAuth(keyId, keySecret)}` } });
+  const data = (await response.json().catch(() => ({}))) as { item?: { currency?: unknown }; error?: { description?: string } };
+  if (!response.ok) throw new Error(data.error?.description || `Could not verify Razorpay plan ${planId}.`);
   const currency = typeof data.item?.currency === "string" ? data.item.currency : "";
   if (!currency) throw new Error(`Razorpay plan ${planId} did not return a currency.`);
   return currency;
 }
 
-async function handleRazorpayOrder(request: Request, env: Record<string, unknown>): Promise<Response> {
+async function handleRazorpayOrder(request: Request, env: Record<string, unknown>, forcedCurrency?: "INR" | "USD"): Promise<Response> {
   const keyId = envString(env, "RAZORPAY_KEY_ID");
   const keySecret = envString(env, "RAZORPAY_KEY_SECRET");
-  if (!keyId || !keySecret) {
-    return new Response(JSON.stringify({ ok: false, error: "Payments are not configured yet." }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
+  if (!keyId || !keySecret) return new Response(JSON.stringify({ ok: false, error: "Payments are not configured yet." }), { status: 503, headers: { "Content-Type": "application/json" } });
   const body = (await request.json().catch(() => ({}))) as { plan?: unknown; currency?: unknown };
-  if (!isPlanId(body.plan)) {
-    return new Response(JSON.stringify({ ok: false, error: "Unknown plan." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
+  if (!isPlanId(body.plan)) return new Response(JSON.stringify({ ok: false, error: "Unknown plan." }), { status: 400, headers: { "Content-Type": "application/json" } });
   const requestedCurrency = body.currency === "USD" || body.currency === "INR" ? body.currency : null;
-  const currency = requestedCurrency || (acceptsInternationalCurrency(request) ? "USD" : "INR");
+  const currency = forcedCurrency || requestedCurrency || (acceptsInternationalCurrency(request) ? "USD" : "INR");
   const plan = RAZORPAY_PLANS[body.plan];
-  const planId = currency === "USD"
-    ? envString(env, body.plan === "pro" ? "RAZORPAY_PRO_USD_PLAN_ID" : "RAZORPAY_BUSINESS_USD_PLAN_ID")
-    : envString(env, body.plan === "pro" ? "RAZORPAY_PRO_PLAN_ID" : "RAZORPAY_BUSINESS_PLAN_ID");
-
-  if (!planId) {
-    return new Response(JSON.stringify({ ok: false, error: `Razorpay ${body.plan} ${currency} subscription plan is not configured yet.` }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
+  const planId = currency === "USD" ? envString(env, body.plan === "pro" ? "RAZORPAY_PRO_USD_PLAN_ID" : "RAZORPAY_BUSINESS_USD_PLAN_ID") : envString(env, body.plan === "pro" ? "RAZORPAY_PRO_PLAN_ID" : "RAZORPAY_BUSINESS_PLAN_ID");
+  if (!planId) return new Response(JSON.stringify({ ok: false, error: `Razorpay ${body.plan} ${currency} subscription plan is not configured yet.` }), { status: 503, headers: { "Content-Type": "application/json" } });
   try {
     const actualCurrency = await fetchRazorpayPlanCurrency(keyId, keySecret, planId);
-    if (actualCurrency !== currency) {
-      throw new Error(
-        `Razorpay plan currency mismatch: requested ${currency}, but plan ${planId} is ${actualCurrency}. Check the Cloudflare plan ID variables.`,
-      );
-    }
-
-    const subscription = await createRazorpaySubscription(keyId, keySecret, plan, planId, {
-      plan: body.plan,
-      currency,
-    });
-    return new Response(JSON.stringify({
-      ok: true,
-      keyId: subscription.keyId,
-      subscriptionId: subscription.subscriptionId,
-      plan: body.plan,
-      planName: subscription.plan.name,
-      currency,
-      displayPrice: currency === "USD" ? USD_PRICES[body.plan] : (body.plan === "pro" ? "₹399 / month" : "₹1,199 / month"),
-    }), { headers: { "Content-Type": "application/json" } });
+    if (actualCurrency !== currency) throw new Error(`Razorpay plan currency mismatch: requested ${currency}, but plan ${planId} is ${actualCurrency}. Check the Cloudflare plan ID variables.`);
+    const subscription = await createRazorpaySubscription(keyId, keySecret, plan, planId, { plan: body.plan, currency });
+    return new Response(JSON.stringify({ ok: true, keyId: subscription.keyId, subscriptionId: subscription.subscriptionId, plan: body.plan, planName: subscription.plan.name, currency, displayPrice: currency === "USD" ? USD_PRICES[body.plan] : INR_PRICES[body.plan] }), { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error("[Worker] Razorpay subscription error:", err);
-    return new Response(JSON.stringify({
-      ok: false,
-      error: err instanceof Error ? err.message : "Could not start checkout. Please try again.",
-    }), { status: 502, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: false, error: err instanceof Error ? err.message : "Could not start checkout. Please try again." }), { status: 502, headers: { "Content-Type": "application/json" } });
   }
 }
 
 export default {
   async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
-
-    if (url.pathname === "/api/razorpay/order" && request.method === "POST") {
-      return handleRazorpayOrder(request, env);
-    }
-
+    if (url.pathname === "/api/razorpay/order/inr" && request.method === "POST") return handleRazorpayOrder(request, env, "INR");
+    if (url.pathname === "/api/razorpay/order/usd" && request.method === "POST") return handleRazorpayOrder(request, env, "USD");
+    if (url.pathname === "/api/razorpay/order" && request.method === "POST") return handleRazorpayOrder(request, env);
     const response = await baseWorker.fetch(request, env, ctx);
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("text/html")) {
       const html = await response.text();
       const headers = new Headers(response.headers);
-      headers.delete("Content-Length");
-      headers.delete("Content-Encoding");
-      headers.delete("ETag");
+      headers.delete("Content-Length"); headers.delete("Content-Encoding"); headers.delete("ETag");
       const nonceMatch = html.match(/<script\s+nonce="([^"]+)"/i);
       const nonce = nonceMatch?.[1] || "";
       const injected = paymentScript(nonce);
-      return new Response(html.replace(/<body([^>]*)>/i, `<body$1>${injected}`), {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      return new Response(html.replace(/<body([^>]*)>/i, `<body$1>${injected}`), { status: response.status, statusText: response.statusText, headers });
     }
     return response;
   },
