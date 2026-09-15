@@ -6,6 +6,8 @@ function envString(env: Record<string, unknown>, key: string): string {
 }
 
 function acceptsInternationalCurrency(request: Request): boolean {
+  const country = (request.headers.get("CF-IPCountry") || "").toUpperCase();
+  if (country === "IN") return false;
   const language = (request.headers.get("Accept-Language") || "").toLowerCase();
   return !language.includes("en-in") && !language.includes("hi-in") && !language.includes("mr-in");
 }
@@ -112,9 +114,7 @@ async function handleRazorpayOrder(request: Request, env: Record<string, unknown
     if (actualCurrency !== currency) throw new Error(`Razorpay plan currency mismatch: requested ${currency}, but plan ${planId} is ${actualCurrency}. Check the Cloudflare plan ID variables.`);
     const subscription = await createRazorpaySubscription(keyId, keySecret, plan, planId, { plan: body.plan, currency });
     const createdSubscriptionPlanId = await fetchRazorpaySubscriptionPlanId(keyId, keySecret, subscription.subscriptionId);
-    if (createdSubscriptionPlanId !== planId) {
-      throw new Error(`Razorpay subscription plan mismatch: expected ${planId}, but subscription ${subscription.subscriptionId} uses ${createdSubscriptionPlanId}.`);
-    }
+    if (createdSubscriptionPlanId !== planId) throw new Error(`Razorpay subscription plan mismatch: expected ${planId}, but subscription ${subscription.subscriptionId} uses ${createdSubscriptionPlanId}.`);
     return new Response(JSON.stringify({ ok: true, keyId: subscription.keyId, subscriptionId: subscription.subscriptionId, plan: body.plan, planName: subscription.plan.name, currency, displayPrice: currency === "USD" ? USD_PRICES[body.plan] : INR_PRICES[body.plan], planId, verifiedPlanId: createdSubscriptionPlanId }), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("[Worker] Razorpay subscription error:", err);
